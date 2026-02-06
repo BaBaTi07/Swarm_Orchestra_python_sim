@@ -3,6 +3,8 @@ from world.world import Arena
 from robot.epuck import Epuck_robot
 
 class Exp( ):
+    #This class assumes Arena parameters have been loaded from JSON before instantiation.
+    
     num_trials     = 0
     num_iterations = 0
     
@@ -20,6 +22,7 @@ class Exp( ):
     def init_all_trials(self):
         self.trial = 0
     
+    #For now, each trial resets all robots to a fixed start position
     def init_single_trial(self):
         for e in range (len(self.epuck)):
             self.epuck[e].set_pos(np.array((0.0, 0.952, 0.0)))
@@ -46,7 +49,7 @@ class Exp( ):
             while ( self.finalise_single_trial() ):
                 self.make_iteration()
                 
-
+    #This is a placeholder controller: constant wheel speeds, only for testing sensing + motion integration
     def make_iteration(self):
         for e in range (len(self.epuck)):
             outputs = np.array((0.45, 0.55))
