@@ -12,13 +12,13 @@
             "arena":
                 {
                 "delta_t": 0.1,
-                "perimetral round wall [x,y,z,radius,height,colour]": [0.0,0.0,0.0,1.0,0.1,1.0,0.2,0.5]
+                "perimetral round wall [x,y,z,radius,height,colour]": [0.0,0.0,0.0, 1.0, 0.1, 1.0,0.2,0.5]
                 }
         },
         {
             "round_obstacle":
                 {
-                    "[x,y,z,radius,h,colour]":[[1.5,1.5,0.0,0.05,0.1,0.0,0.4,0.4]]
+                    "[x,y,z,radius,h,colour]":[[1.5,1.5,0.0, 0.05, 0.1, 0.0,0.4,0.4]]
                 }
         },
         {
