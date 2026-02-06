@@ -1,0 +1,37 @@
+{
+    "experiment":
+    [
+        {
+            "duration":
+            {
+                "num_trials": 2,
+                "num_iterations": 200
+            }
+        },
+        {
+            "arena":
+                {
+                "delta_t": 0.1,
+                "perimetral round wall [x,y,z,radius,height,colour]": [0.0,0.0,0.0,1.0,0.1,1.0,0.2,0.5]
+                }
+        },
+        {
+            "round_obstacle":
+                {
+                    "[x,y,z,radius,h,colour]":[[1.5,1.5,0.0,0.05,0.1,0.0,0.4,0.4]]
+                }
+        },
+        {
+            "cuboid_obstacle":
+                {
+                    "[x,y,z,l,w,h,rx,ry,rz,colour]":[[1.5,0.0,0.0, 2.0,0.000001,0.1, 0.0,0.0,45.0, 0.6,0.0,0.0]]
+                }
+        },
+        {
+            "e_pucks":
+                {
+                    "[x,y,z,rot_x,rot_y,rot_z,colour]":[[0.0,0.955,0.0, 0.0,0.0,270.0, 0.4,0.0,0.6]]
+                }
+        }
+    ]
+}

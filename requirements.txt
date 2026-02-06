@@ -1,0 +1,26 @@
+A virtual environment should be created and activated inside the dir "python_2D_sim"
+This is to install the virtualenv command:
+
+> pip install virtualenv 
+
+Then, to create the virtual environment "venv" type:
+
+> virtualenv venv
+
+or
+
+> python -m venv venv
+
+To activate the virtual environment "venv" type:
+
+> source venv/bin/activate
+
+Inside "venv" (that is, when "venv" is activated) you have to install the following packages:
+
+> pip install numpy
+> pip install pyqt6 
+> pip install PyOpenGL PyOpenGL_accelerate 
+
+To deactivate "venv" type:
+
+> deactivate
