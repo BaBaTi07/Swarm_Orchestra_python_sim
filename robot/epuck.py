@@ -38,7 +38,7 @@ class Epuck_robot( ):
     def set_colour(self, _col):
         self.colour[0] = _col[0]
         self.colour[1] = _col[1]
-        self.colour[2] = _col[1]
+        self.colour[2] = _col[2]
     
     def set_linear_vel(self, _lin_vel):
         self.linear_vel[0] = _lin_vel[0]
