@@ -1,57 +1,56 @@
 import json
 import numpy as np
-from world.world import Arena
-from exp.experiment_1 import Exp
 
-#TODO : handle json objects in any order
-#TODO : handle missing json objects (e.g. no round_obstacle, no cuboid_obstacle, etc.)
-#TODO : handle wrong json objects (e.g. wrong keys, wrong values, etc.)
+from GRAPHICS.interface import *
+from WORLD.world import *
+from EXP.experiment import *
+from WORLD.epuck import *
+from WORLD.shapes import *
+from WORLD.world import *
 
-def read_json_file (file_name):
+def read_json_file (file_name: str):
     try:
         with open(file_name, 'r') as file:
             data = json.load(file)
+            for k, v in data["experiment"][0]["duration"].items():
+                if k == "num_trials":
+                    Exp.num_trials = v
+                elif k == "num_iterations":
+                    Exp.num_iterations = v
+                elif k == "seed":
+                    exp_seed = int(v)
+    
+            for k, v in data["experiment"][1]["arena"].items():
+                if k == "delta_t(ms)":
+                    MainWindow.delta_t_ms    = v
+                    Diff_drive_robot.delta_t = (1.0/v)
+                    
+                elif k == "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]":
+                    if np.any(v):
+                        for n in range(len(v)):
+                            Arena.ring = np.append(Arena.ring, Ring(v[n][0:3], v[n][3], v[n][4], v[n][5:8], v[n][8:11]))
+    
+                        
+            for k, v in data["experiment"][2]["round_obstacle"].items():
+                if k == "[x,y,z,radius,height,rx,ry,rz,colour]":
+                    if np.any(v):
+                        for n in range(len(v)):
+                            Arena.cylinder = np.append(Arena.cylinder, Cylinder(v[n][0:3], v[n][3], v[n][4], v[n][5:8], v[n][8:11]))
+
+            for k, v in data["experiment"][3]["cuboid_obstacle"].items():
+                # print(k)
+                if k == "[x,y,z,l,w,h,rx,ry,rz,colour]":
+                    if np.any(v):
+                        for n in range(len(v)):
+                            Arena.cuboid = np.append(Arena.cuboid, Cuboid(v[n][0:3], v[n][3:6], v[n][6:9], v[n][9:12]))
+                
+            for k, v in data["experiment"][4]["e_pucks"].items():
+                if k == "[x,y,z,rx,ry,rz,colour]":
+                    if np.any(v):
+                        v = np.array(v)
+                        for id in range(len(v)):
+                            Arena.epuck = np.append(Arena.epuck, Epuck_robot(id, v[id][0:3], v[id][3:6], v[id][6:9], np.zeros(2) ))
+                    
     except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Error: The file {file_name} was not found."
-            "\nSimulation cannot start without a valid JSON configuration file."
-        )
-    except json.JSONDecodeError as e:
-        raise ValueError(
-            f"Invalid JSON format in '{file_name}': {e}"
-        )
-    for k, v in data["experiment"][0]["duration"].items():
-        if k == "num_trials":
-            Exp.num_trials = v
-            # print(f"Trials = {Exp.num_trials}")
-        elif k == "num_iterations":
-            Exp.num_iterations = v
-            # print(f"Iterations = {Exp.num_iterations}")
-
-    for k, v in data["experiment"][1]["arena"].items():
-        # print(k)
-        if k == "delta_t":
-            Arena.DeltaT = v 
-            # print(Arena.DeltaT)
-        elif k == "perimetral round wall [x,y,z,radius,height,colour]":
-            Arena.perimetral_wall_xyz_radius_height_colour = np.array(v) 
-            # print(Arena.perimetral_wall_xyz_radius_height_colour)
-
-    for k, v in data["experiment"][2]["round_obstacle"].items():
-        # print(k)
-        if k == "[x,y,z,radius,h,colour]":
-            Arena.round_obst_xyz_radius_height_colour = np.array(v) 
-            # print(Arena.round_obst_xyz_radius_h_colour)
-            
-    for k, v in data["experiment"][3]["cuboid_obstacle"].items():
-        # print(k)
-        if k == "[x,y,z,l,w,h,rx,ry,rz,colour]":
-            Arena.cuboid_obst_xyz_lwh_rxryrz_colour = np.array(v)
-            # print(Arena.cuboid_obst_xyz_lwh)
-        
-    for k, v in data["experiment"][4]["e_pucks"].items():
-        # print(k)
-        if k == "[x,y,z,rot_x,rot_y,rot_z,colour]":
-            Arena.epucks_xyz_rx_ry_rz_colour = np.array(v) 
-            # print(Arena.epucks_xyz_rx_ry_rz_colour)
-            
+        print("Error: The file '.json' was not found.")
+    return exp_seed

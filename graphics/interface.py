@@ -1,18 +1,19 @@
 from PyQt6.QtCore import QSize
-from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QToolButton, QVBoxLayout, QHBoxLayout, QSpinBox
+from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QToolButton, QVBoxLayout, QHBoxLayout, QSpinBox, QLabel
 
-from graphics.viewer import Viewer
-from graphics.engine import Engine
-from exp.experiment_1 import Exp
+from GRAPHICS.viewer import Viewer
+from GRAPHICS.engine import Engine
+from EXP.experiment import Exp
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, my_exp: Exp, delta_t_ms ):
+    delta_t_ms = 0.0
+    
+    def __init__(self):
         # Configure main window 
         super().__init__()
-        self.delta_t_ms = delta_t_ms
-        self.viewer = Viewer( my_exp )
-        self.eng    = Engine( self.viewer, my_exp, self.delta_t_ms)
+        self.viewer = Viewer( )
+        self.eng    = Engine( self.viewer, MainWindow.delta_t_ms)
         # self.viewer.setMinimumHeight(300);
         self.viewer.resize(600, 600)
         self.setWindowTitle("E-puck simulator (version 0.1)")
@@ -50,11 +51,23 @@ class MainWindow(QMainWindow):
         self.button_2.clicked.connect( self.advance_run )
         
         self.button_3 = QToolButton()
-        self.button_3.setText("Quit")
+        self.button_3.setText("Init")
         # oneStepButtom.setIcon(QIcon('path/to/icon.png'))
-        self.button_3.clicked.connect(self.close)
+        self.button_3.clicked.connect(self.re_init)
+        
+        self.button_4 = QToolButton()
+        self.button_4.setText("Quit")
+        # oneStepButtom.setIcon(QIcon('path/to/icon.png'))
+        self.button_4.clicked.connect(self.close)
         
         # # Input time interval
+        self.spin_ms = QSpinBox()
+        self.spin_ms.setRange(0, 90)
+        self.spin_ms.setValue(0)
+        self.spin_ms.setSuffix(" ms slower")
+        self.spin_ms.valueChanged.connect(self.on_value_changed)
+        self.delay_label = QLabel(f"Actual delay (ms): {self.spin_ms.value()}")
+        
         # self.spin_ms = QSpinBox()
         # # self.spin_ms.setRange(self.delta_t_ms)
         # self.spin_ms.setSingleStep(0)
@@ -65,9 +78,15 @@ class MainWindow(QMainWindow):
         self.buttonslayout.addWidget(self.button_1)
         self.buttonslayout.addWidget(self.button_2)
         self.buttonslayout.addWidget(self.button_3)
+        self.buttonslayout.addWidget(self.button_4)
+        self.buttonslayout.addWidget(self.delay_label)
+        self.buttonslayout.addWidget(self.spin_ms)
         self.buttonslayout.addWidget(self.eng.label)
-
-    def advance_step_by_step( self, checked ):
+        
+    def re_init( self ):
+        self.eng.re_init()
+        
+    def advance_step_by_step( self ):
         self.eng.step_by_step_interval_ms()
             
     def advance_run( self, checked ):
@@ -75,12 +94,20 @@ class MainWindow(QMainWindow):
             self.button_1.setEnabled(False)
             self.button_2.setText("Stop trial")
             self.button_3.setEnabled(False)
+            self.button_4.setEnabled(False)
+            self.spin_ms.setEnabled(False)
             self.eng.start_timer()
         else:
             self.button_1.setEnabled(True)
             self.button_2.setText("Run")
             self.button_3.setEnabled(True)
+            self.button_4.setEnabled(True)
+            self.spin_ms.setEnabled(True)
             self.eng.stop_main_timer()
+        
+    def on_value_changed(self, value):
+        self.delay_label.setText(f"Actual delay (ms): {value}")
+        self.eng.set_delay_on_delta_t_ms(value)
             
     def close( self ):
         QApplication.instance().quit()

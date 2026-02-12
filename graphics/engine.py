@@ -1,19 +1,19 @@
 from PyQt6.QtCore import Qt, QTimer
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
-from graphics.viewer import Viewer
-from exp.experiment_1 import Exp
+from GRAPHICS.viewer import Viewer
+from EXP.experiment import Exp
 
 class Engine( QWidget ):
-    def __init__(self, viewer: Viewer, my_exp: Exp, delta_t_ms):
+    def __init__(self, viewer: Viewer, delta_t_ms):
         super().__init__()
-        self.my_exp            = my_exp
         self.viewer            = viewer
         self.isAllTrialsInit   = False
         self.isSingleTrialInit = False
             
         self.time_ms    = 0
-        self.delta_t_ms = delta_t_ms # in ms
+        self.delay_ms   = 0
+        self.delta_t_ms = delta_t_ms + self.delay_ms # in ms
 
         # main Timer (tick every "interval" ms)
         self.timer = QTimer(self)
@@ -25,12 +25,15 @@ class Engine( QWidget ):
         self.stop_timer.timeout.connect(self.stop_main_timer)
 
         # Label
-        self.label = QLabel(f"Time: {self.time_ms} ms, Trial = {self.my_exp.trial}, Iteration = {self.my_exp.iter}")        
+        self.label = QLabel(f"Time: {self.time_ms} ms, Trial = {Exp.trial}, Iteration = {Exp.iter}")        
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    
+    def set_delay_on_delta_t_ms(self, value):
+        self.delay_ms = value
         
     def start_timer(self):
         if not self.timer.isActive():
-            self.timer.start(self.delta_t_ms)
+            self.timer.start(self.delta_t_ms + self.delay_ms)
             
     def stop_main_timer(self):
         self.timer.stop()
@@ -40,39 +43,44 @@ class Engine( QWidget ):
         self.time_ms += self.delta_t_ms
         # self.iterations = int(self.time_ms/self.delta_t_ms)
         self.advance()
-        self.label.setText(f"Time: {self.time_ms} ms, Trial = {self.my_exp.trial}, Iteration = {self.my_exp.iter}")
+        self.label.setText(f"Time: {self.time_ms} ms, Trial = {Exp.trial}, Iteration = {Exp.iter}")
         self.viewer.update()
         
         
     def step_by_step_interval_ms(self):
         # Star main timer
-        self.timer.start(self.delta_t_ms)
+        self.timer.start(self.delta_t_ms + self.delay_ms)
         # Afer interval ms → automatic stop
-        self.stop_timer.start(self.delta_t_ms)
+        self.stop_timer.start(self.delta_t_ms + self.delay_ms)
         
                 
     def initialize( self ) :
         if self.isAllTrialsInit == False:
-            self.my_exp.init_all_trials()
-            self.my_exp.init_single_trial()
+            Exp.init_all_trials()
+            Exp.init_single_trial()
             self.isAllTrialsInit   = True
             self.isSingleTrialInit = True
         elif self.isSingleTrialInit == False:
-            self.my_exp.init_single_trial()
+            Exp.init_single_trial()
             self.isSingleTrialInit = True  
             
             
     def finalise( self ):
-        if not self.my_exp.finalise_single_trial():
+        if not Exp.finalise_single_trial():
             self.isSingleTrialInit = False
-        if not self.my_exp.finalise_all_trials():
+        if not Exp.finalise_all_trials():
             self.isAllTrialsInit = False
             self.isSingleTrialInit = False
             self.stop_main_timer()
+    
+    def re_init(self):
+        Exp.trial = Exp.num_trials
+        Exp.iter  = Exp.num_iterations
+        self.finalise( )
         
     def advance( self ):
         self.initialize()
-        self.my_exp.make_iteration()
+        Exp.make_iteration()
         self.finalise()    
         
 class Tmp_window(QWidget):
