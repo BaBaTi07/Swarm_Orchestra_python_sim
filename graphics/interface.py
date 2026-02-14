@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
         self.button_4.clicked.connect(self.close)
 
         self.button_fast = QToolButton()
-        self.button_fast.setText("Base")
+        self.button_fast.setText("Speed")
         self.button_fast.clicked.connect(self.toggle_fast_mode)
 
         
@@ -96,14 +96,14 @@ class MainWindow(QMainWindow):
         self.eng.step_by_step_interval_ms()
 
     def toggle_fast_mode( self ):
-        if self.eng.speed_multiplier < 1.0:
-            self.eng.set_speed_multiplier(10)
+        if self.eng.speed_multiplier == 1.0:
+            self.eng.set_speed_multiplier(4.0)
             self.button_fast.setText("Fast")
-        elif self.eng.speed_multiplier > 1.0:
+        elif self.eng.speed_multiplier < 1.0:
             self.eng.set_speed_multiplier(1.0)
             self.button_fast.setText("Base")
-        elif self.eng.speed_multiplier == 1.0:
-            self.eng.set_speed_multiplier(0.1)
+        elif self.eng.speed_multiplier > 1.0:
+            self.eng.set_speed_multiplier(0.25)
             self.button_fast.setText("Slow")
             
     def advance_run( self, checked ):
