@@ -59,6 +59,11 @@ class MainWindow(QMainWindow):
         self.button_4.setText("Quit")
         # oneStepButtom.setIcon(QIcon('path/to/icon.png'))
         self.button_4.clicked.connect(self.close)
+
+        self.button_fast = QToolButton()
+        self.button_fast.setText("Base")
+        self.button_fast.clicked.connect(self.toggle_fast_mode)
+
         
         # # Input time interval
         self.spin_ms = QSpinBox()
@@ -79,6 +84,7 @@ class MainWindow(QMainWindow):
         self.buttonslayout.addWidget(self.button_2)
         self.buttonslayout.addWidget(self.button_3)
         self.buttonslayout.addWidget(self.button_4)
+        self.buttonslayout.addWidget(self.button_fast)
         self.buttonslayout.addWidget(self.delay_label)
         self.buttonslayout.addWidget(self.spin_ms)
         self.buttonslayout.addWidget(self.eng.label)
@@ -88,6 +94,17 @@ class MainWindow(QMainWindow):
         
     def advance_step_by_step( self ):
         self.eng.step_by_step_interval_ms()
+
+    def toggle_fast_mode( self ):
+        if self.eng.speed_multiplier < 1.0:
+            self.eng.set_speed_multiplier(10)
+            self.button_fast.setText("Fast")
+        elif self.eng.speed_multiplier > 1.0:
+            self.eng.set_speed_multiplier(1.0)
+            self.button_fast.setText("Base")
+        elif self.eng.speed_multiplier == 1.0:
+            self.eng.set_speed_multiplier(0.1)
+            self.button_fast.setText("Slow")
             
     def advance_run( self, checked ):
         if checked:

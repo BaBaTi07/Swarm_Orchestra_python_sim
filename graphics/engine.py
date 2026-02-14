@@ -13,7 +13,8 @@ class Engine( QWidget ):
             
         self.time_ms    = 0
         self.delay_ms   = 0
-        self.delta_t_ms = delta_t_ms + self.delay_ms # in ms
+        self.base_delta_t_ms = float(delta_t_ms)
+        self.speed_multiplier = 1.0
 
         # main Timer (tick every "interval" ms)
         self.timer = QTimer(self)
@@ -27,20 +28,42 @@ class Engine( QWidget ):
         # Label
         self.label = QLabel(f"Time: {self.time_ms} ms, Trial = {Exp.trial}, Iteration = {Exp.iter}")        
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._apply_timer_interval()
     
+    #internal method to compute the effective interval based on base delta_t, delay and speed multiplier
+    def _effective_interval_ms(self) -> int:
+        eff = (self.base_delta_t_ms + float(self.delay_ms)) / float(self.speed_multiplier)
+        if eff < 1:
+            eff = 1
+        return int(round(eff))
+
+    def _apply_timer_interval(self) -> None:
+        interval = self._effective_interval_ms()
+        self.timer.setInterval(interval)
+        self.stop_timer.setInterval(interval)
+
     def set_delay_on_delta_t_ms(self, value):
-        self.delay_ms = value
+        self.delay_ms = int(value)
+        self._apply_timer_interval()
+
+    def set_speed_multiplier(self, mult):
+        mult = float(mult)
+        self.speed_multiplier = mult
+        self._apply_timer_interval()
+        print("speed:", self.speed_multiplier, "timer interval:", self.timer.interval())
         
     def start_timer(self):
         if not self.timer.isActive():
-            self.timer.start(self.delta_t_ms + self.delay_ms)
+            self.timer.start()
             
     def stop_main_timer(self):
         self.timer.stop()
         self.stop_timer.stop()
 
     def tick(self):
-        self.time_ms += self.delta_t_ms
+        self.time_ms += int(round(self.base_delta_t_ms))
+
         # self.iterations = int(self.time_ms/self.delta_t_ms)
         self.advance()
         self.label.setText(f"Time: {self.time_ms} ms, Trial = {Exp.trial}, Iteration = {Exp.iter}")
@@ -49,9 +72,9 @@ class Engine( QWidget ):
         
     def step_by_step_interval_ms(self):
         # Star main timer
-        self.timer.start(self.delta_t_ms + self.delay_ms)
+        self.timer.start()
         # Afer interval ms → automatic stop
-        self.stop_timer.start(self.delta_t_ms + self.delay_ms)
+        self.stop_timer.start()
         
                 
     def initialize( self ) :
