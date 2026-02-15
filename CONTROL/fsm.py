@@ -19,7 +19,7 @@ class Fsm( ):
     def random_turn_length( self ):
         c = ( (2.0 * self.rho) / (1.0 + (self.rho * self.rho)) )
         V = np.cos(np.random.rand()* (2.0*np.pi))
-        sigma = np.acos((V+c)/(1+(c*V)) )  # [0, PI];
+        sigma = np.arccos((V+c)/(1+(c*V)) )  # [0, PI];
         return int((np.rint(25.0 * sigma)/np.pi))
     
 
