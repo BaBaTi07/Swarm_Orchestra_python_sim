@@ -162,6 +162,133 @@ class Arena():
                 if d_surface <= ir_range and d_surface < distance[ir]:
                     distance[ir] = d_surface
 
+    def compute_dist_to_cylinder(id: int, cyl: Cylinder, ir_range: float, ir_angle: NDArray[np.float64], distance: NDArray[np.float64]):
+        #similar torobot distance but with cylinder
+        
+        P = np.array(Arena.epuck[id].pos[0:2], dtype=float)
+        Q = np.array(cyl.pos[0:2], dtype=float)
+
+        r_self = float(Arena.epuck[id].radius)
+        r_cyl  = float(cyl.radius)
+
+        centre_dist = np.linalg.norm(Q - P)
+        if centre_dist - (r_self + r_cyl) > ir_range:
+            return
+
+        m = P - Q
+        yaw = float(Arena.epuck[id].rot[2])
+
+        for ir in range(len(ir_angle)):
+            phi = yaw + float(ir_angle[ir])
+            ux = float(np.cos(phi))
+            uy = float(np.sin(phi))
+
+            b = 2.0 * (ux * m[0] + uy * m[1])
+            c = (m[0]*m[0] + m[1]*m[1]) - (r_cyl*r_cyl)
+
+            disc = b*b - 4.0*c
+            if disc < 0.0:
+                continue
+
+            sqrt_disc = float(np.sqrt(disc))
+            t1 = (-b - sqrt_disc) * 0.5
+            t2 = (-b + sqrt_disc) * 0.5
+
+            t_candidates = []
+            if t1 >= 0.0: t_candidates.append(t1)
+            if t2 >= 0.0: t_candidates.append(t2)
+            if not t_candidates:
+                continue
+
+            t = min(t_candidates)
+
+            d_surface = t - r_self
+            if d_surface < 0.0:
+                d_surface = 0.0
+
+            if d_surface <= ir_range and d_surface < distance[ir]:
+                distance[ir] = d_surface
+
+    def compute_dist_to_cuboid(id: int,cub: Cuboid,ir_range: float,ir_angle: NDArray[np.float64],distance: NDArray[np.float64]):
+    
+        P = np.array(Arena.epuck[id].pos[0:2], dtype=float)# centre du robot en 2D
+        C = np.array(cub.pos[0:2], dtype=float)             # centre du cuboid en 2D
+
+        r_self = float(Arena.epuck[id].radius)
+
+        hx = 0.5 * float(cub.dim[0]) 
+        hy = 0.5 * float(cub.dim[1])  
+
+        # Rotation yaw du cuboid
+        yaw_c = float(cub.rot[2]) if hasattr(cub, "rot") else 0.0
+
+        # Bounding circle radius for quick rejection test
+        bounding = np.sqrt(hx*hx + hy*hy) + r_self
+        if np.linalg.norm(P - C) - bounding > ir_range:
+            return
+
+        # Matrice rotation inverse 
+        # on fait tourner le repere autour du centre du cuboid pour que le cuboid soit aligné
+        cos_y = np.cos(-yaw_c)
+        sin_y = np.sin(-yaw_c)
+
+        def world_to_local(v: np.ndarray) -> np.ndarray:
+            return np.array([
+                cos_y * v[0] - sin_y * v[1],
+                sin_y * v[0] + cos_y * v[1],
+            ], dtype=float)
+
+        # Origine of rayon in cuboid local frame
+        p_local = world_to_local(P - C)
+
+        yaw_r = float(Arena.epuck[id].rot[2])
+
+        eps = 1e-12
+        for ir in range(len(ir_angle)):
+            phi = yaw_r + float(ir_angle[ir])
+            u_world = np.array([np.cos(phi), np.sin(phi)], dtype=float)
+            u_local = world_to_local(u_world)
+
+            # Intersection rayon (p_local + t*u_local) avec AABB [-hx,hx] x [-hy,hy]
+            tmin = -np.inf
+            tmax =  np.inf
+
+            # Axe X
+            if abs(u_local[0]) < eps:
+                # Rayon parallèle aux faces verticales
+                if p_local[0] < -hx or p_local[0] > hx:
+                    continue
+            else:
+                tx1 = (-hx - p_local[0]) / u_local[0]
+                tx2 = ( hx - p_local[0]) / u_local[0]
+                tmin = max(tmin, min(tx1, tx2))
+                tmax = min(tmax, max(tx1, tx2))
+
+            # Axe Y
+            if abs(u_local[1]) < eps:
+                if p_local[1] < -hy or p_local[1] > hy:
+                    continue
+            else:
+                ty1 = (-hy - p_local[1]) / u_local[1]
+                ty2 = ( hy - p_local[1]) / u_local[1]
+                tmin = max(tmin, min(ty1, ty2))
+                tmax = min(tmax, max(ty1, ty2))
+
+            # Pas d'intersection
+            if tmax < 0.0 or tmin > tmax:
+                continue
+
+            # Première intersection devant le rayon
+            t = tmin if tmin >= 0.0 else tmax 
+
+            # Distance depuis surface du robot
+            d_surface = t - r_self
+            if d_surface < 0.0:
+                d_surface = 0.0
+
+            if d_surface <= ir_range and d_surface < distance[ir]:
+                distance[ir] = d_surface
+
     def compute_min_dist_to_objects(id: np.int64, ir_range:np.float64, ir_angle: NDArray[np.float64], distance: NDArray[np.float64] ):
         for r in Arena.ring:
             rob_arena_centre_dist = np.linalg.norm(Arena.epuck[id].pos - r.pos)
@@ -171,18 +298,12 @@ class Arena():
         
         for cyl in Arena.cylinder:
             rob_cylinder_dist = np.linalg.norm(Arena.epuck[id].pos - cyl.pos)
-            # if ( rob_cylinder_dist - cyl.radius - Arena.epuck[id].radius) < ir_range :
-                # TASK A - This piece of code has to be completed with a function 
-                # that updates the np.array distance (only smaller distances have to be updates)
-                # taking into account robot-cylinder interactions
+            if (rob_cylinder_dist - cyl.radius - Arena.epuck[id].radius) <= ir_range:
+                Arena.compute_dist_to_cylinder(id, cyl, ir_range, ir_angle, distance)
                 
                 
         for cub in Arena.cuboid:
-            rob_cuboid_dist = np.linalg.norm(Arena.epuck[id].pos - cub.pos)
-            # if ( rob_cuboid_dist - cub.dim[1] - Arena.epuck[id].radius) < ir_range :
-                 # TASK B - This piece of code has to be completed with a function 
-                # that updates the np.array distance (only smaller distances have to be updates)
-                # taking into account robot-cuboid interactions
+            Arena.compute_dist_to_cuboid(id, cub, ir_range, ir_angle, distance)
                 
         for e in range(len(Arena.epuck)):
             if id != Arena.epuck[e].id:
