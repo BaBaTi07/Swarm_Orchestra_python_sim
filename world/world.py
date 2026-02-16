@@ -107,6 +107,60 @@ class Arena():
                     elif ( dist[ir] < distance[ir] ):
                         distance[ir] = dist[ir]
                     
+    def compute_dist_to_robot(id: int, other_id: int,ir_range: float, ir_angle: NDArray[np.float64], distance: NDArray[np.float64]):
+
+            P = np.array(Arena.epuck[id].pos[0:2], dtype=float)           # centre robot courant
+            Q = np.array(Arena.epuck[other_id].pos[0:2], dtype=float)     # centre robot cible
+
+            r_self = float(Arena.epuck[id].radius)
+            r_other = float(Arena.epuck[other_id].radius)
+
+            # too far -> no computation 
+            centre_dist = np.linalg.norm(Q - P)
+            if centre_dist - (r_self + r_other) > ir_range:
+                return
+            
+            # Vector from other robot centre to current robot centre
+            m = P - Q 
+
+            # Angle of the current robot in world frame
+            yaw = float(Arena.epuck[id].rot[2])
+
+            for ir in range(len(ir_angle)):
+                phi = yaw + float(ir_angle[ir])
+                ux = float(np.cos(phi))
+                uy = float(np.sin(phi))
+
+                # Solve intersection of ray with circle of radius r_other around Q:
+                b = 2.0 * (ux * m[0] + uy * m[1])
+                c = (m[0] * m[0] + m[1] * m[1]) - (r_other * r_other)
+
+                disc = b * b - 4.0 * c
+                if disc < 0.0:
+                    continue
+
+                sqrt_disc = float(np.sqrt(disc))
+                t1 = (-b - sqrt_disc) * 0.5
+                t2 = (-b + sqrt_disc) * 0.5
+
+                # Intersection devant le capteur (t >= 0)
+                t = None
+                if t1 >= 0.0 and t2 >= 0.0:
+                    t = min(t1, t2)
+                elif t1 >= 0.0:
+                    t = t1
+                elif t2 >= 0.0:
+                    t = t2
+                else:
+                    continue
+
+                # distance from robot surface
+                d_surface = t - r_self
+                if d_surface < 0.0:
+                    d_surface = 0.0
+
+                if d_surface <= ir_range and d_surface < distance[ir]:
+                    distance[ir] = d_surface
 
     def compute_min_dist_to_objects(id: np.int64, ir_range:np.float64, ir_angle: NDArray[np.float64], distance: NDArray[np.float64] ):
         for r in Arena.ring:
@@ -132,8 +186,7 @@ class Arena():
                 
         for e in range(len(Arena.epuck)):
             if id != Arena.epuck[e].id:
-                rob_rob_dist = np.linalg.norm(Arena.epuck[id].pos - Arena.epuck[Arena.epuck[e].id].pos)
-                # if ( rob_rob_dist - Arena.epuck[id].radius - Arena.epuck[Arena.epuck[e].id].radius) < ir_range :
-                # TASK C - This piece of code has to be completed with a function 
-                # that updates the np.array distance (only smaller distances have to be updates)
-                # taking into account robot-robot interactions
+                other_id = Arena.epuck[e].id
+                rob_rob_dist = np.linalg.norm(Arena.epuck[id].pos - Arena.epuck[other_id].pos)
+                if (rob_rob_dist - Arena.epuck[id].radius - Arena.epuck[other_id].radius) <= ir_range:
+                    Arena.compute_dist_to_robot(id, other_id, ir_range, ir_angle, distance)
