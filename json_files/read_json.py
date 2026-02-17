@@ -118,56 +118,48 @@ def read_json_file(file_name: str):
             else:
                 _log("WARN", f"Unknown key in 'cuboid_obstacle': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
-    def handle_e_pucks(section: dict):
+    def handle_robot(section_label: str, robot_class):
+        """
+        Returns a handler function for robot
+        sections (e_pucks, music_bots, etc.)
+        """
         known_keys = {"[x,y,z,rx,ry,rz,colour]"}
-        for k, v in section.items():
-            if k == "[x,y,z,rx,ry,rz,colour]":
-                if v is None or len(v) == 0:
-                    _log("INFO", "e_pucks list is empty.")
-                    return
-                arr = np.array(v, dtype=float)
-                for rid in range(len(arr)):
-                    row = arr[rid]
-                    if len(row) < 9:
-                        _log("WARN", f"e_puck entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
-                        continue
-                    global_robot_id = len(Arena.robot)
-                    Arena.robot = np.append(
-                        Arena.robot,
-                        Epuck_robot(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
-                    )
-            else:
-                _log("WARN", f"Unknown key in 'e_pucks': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
-    
-    def handle_music_bots(section: dict):
-        known_keys = {"[x,y,z,rx,ry,rz,colour]"}
-        for k, v in section.items():
-            if k == "[x,y,z,rx,ry,rz,colour]":
-                if v is None or len(v) == 0:
-                    _log("INFO", "music_bots list is empty.")
-                    return
-                arr = np.array(v, dtype=float)
-                for rid in range(len(arr)):
-                    row = arr[rid]
-                    if len(row) < 9:
-                        _log("WARN", f"music_bot entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
-                        continue
-                    global_robot_id = len(Arena.robot)
-                    Arena.robot = np.append(
-                        Arena.robot,
-                        MusicBot(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
-                    )
-            else:
-                _log("WARN", f"Unknown key in 'music_bots': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
-    
+        
+        def handler(section: dict):
+            for k, v in section.items():
+                if k == "[x,y,z,rx,ry,rz,colour]":
+
+                    if v is None or len(v) == 0:
+                        _log("INFO", f"{section_label} list is empty.")
+                        return
+                    
+                    arr = np.array(v, dtype=float)
+                    for rid in range(len(arr)):
+                        row = arr[rid]
+                        if len(row) < 9:
+                            _log("WARN", f"{section_label} entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
+                            continue
+
+                        global_robot_id = len(Arena.robot)
+
+                        Arena.robot = np.append(
+                            Arena.robot,
+                            robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
+                        )
+                else:
+                    _log("WARN", f"Unknown key in '{section_label}': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+        
+        #handler function is returned by handle_robot and added to handlers dict
+        return handler 
+       
     handlers = {
         "comment": handle_comment,
         "duration": handle_duration,
         "arena": handle_arena,
         "round_obstacle": handle_round_obstacle,
         "cuboid_obstacle": handle_cuboid_obstacle,
-        "e_pucks": handle_e_pucks,
-        "music_bots": handle_music_bots,
+        "e_pucks": handle_robot("e_pucks", Epuck_robot),
+        "music_bots": handle_robot("music_bots", MusicBot),
     }
 
     # Process each item in the experiment list
