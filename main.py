@@ -6,7 +6,7 @@ from GRAPHICS.interface import MainWindow
 
 from json_files.read_json import * 
 from EXP.experiment import *
-from WORLD.world import *
+from WORLD.arena import *
 
 def preamble( ):
     parser = argparse.ArgumentParser()

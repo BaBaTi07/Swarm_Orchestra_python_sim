@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
-from WORLD.world import Arena
+from WORLD.arena import Arena
 
 class Ultrasonic_sensors():
     nb_sensors              = 8

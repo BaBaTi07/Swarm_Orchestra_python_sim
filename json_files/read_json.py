@@ -2,12 +2,11 @@ import json
 import numpy as np
 
 from GRAPHICS.interface import *
-from WORLD.world import *
+from WORLD.arena import *
 from EXP.experiment import *
 from WORLD.epuck import *
 from WORLD.musicbot import *
 from WORLD.shapes import *
-from WORLD.world import *
 
 def _log(level: str, msg: str):
     print(f"[{level}] {msg}")

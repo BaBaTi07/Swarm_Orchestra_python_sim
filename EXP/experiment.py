@@ -1,6 +1,6 @@
 import numpy as np
 from CONTROL.fsm import *
-from WORLD.world import *
+from WORLD.arena import *
 
 class Exp( ):
     num_trials     = 0
