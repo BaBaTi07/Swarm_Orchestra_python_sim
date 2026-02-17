@@ -61,8 +61,8 @@ class Viewer(QOpenGLWidget):
         for cuboid in Arena.cuboid:
             cuboid.draw()
             
-        # ---- draw epuck robots here ----
-        for ep in Arena.epuck:
+        # ---- draw robot robots here ----
+        for ep in Arena.robot:
             ep.draw()
             
     # ---------- Mouse ----------

@@ -5,6 +5,7 @@ from GRAPHICS.interface import *
 from WORLD.world import *
 from EXP.experiment import *
 from WORLD.epuck import *
+from WORLD.musicbot import *
 from WORLD.shapes import *
 from WORLD.world import *
 
@@ -131,13 +132,33 @@ def read_json_file(file_name: str):
                     if len(row) < 9:
                         _log("WARN", f"e_puck entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
                         continue
-                    Arena.epuck = np.append(
-                        Arena.epuck,
+                    Arena.robot = np.append(
+                        Arena.robot,
                         Epuck_robot(rid, row[0:3], row[3:6], row[6:9], np.zeros(2))
                     )
             else:
                 _log("WARN", f"Unknown key in 'e_pucks': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
-
+    
+    def handle_music_bots(section: dict):
+        known_keys = {"[x,y,z,rx,ry,rz,colour]"}
+        for k, v in section.items():
+            if k == "[x,y,z,rx,ry,rz,colour]":
+                if v is None or len(v) == 0:
+                    _log("WARN", "music_bots list is empty.")
+                    return
+                arr = np.array(v, dtype=float)
+                for rid in range(len(arr)):
+                    row = arr[rid]
+                    if len(row) < 9:
+                        _log("WARN", f"music_bot entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
+                        continue
+                    Arena.robot = np.append(
+                        Arena.robot,
+                        MusicBot(rid, row[0:3], row[3:6], row[6:9], np.zeros(2))
+                    )
+            else:
+                _log("WARN", f"Unknown key in 'music_bots': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+    
     handlers = {
         "comment": handle_comment,
         "duration": handle_duration,
@@ -145,6 +166,7 @@ def read_json_file(file_name: str):
         "round_obstacle": handle_round_obstacle,
         "cuboid_obstacle": handle_cuboid_obstacle,
         "e_pucks": handle_e_pucks,
+        "music_bots": handle_music_bots,
     }
 
     # Process each item in the experiment list

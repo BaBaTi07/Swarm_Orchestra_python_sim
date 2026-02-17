@@ -12,10 +12,14 @@ class Epuck_robot( Diff_drive_robot ):
 
     def __init__ ( self, id: np.int64, pos: NDArray[np.float64], rot: NDArray[np.float64], colour: NDArray[np.float64], linear_vel: NDArray[np.float64] ):
         super().__init__(id, pos, rot, linear_vel, Epuck_robot.wheel_distance, Epuck_robot.wheel_radius, Epuck_robot.robot_radius, Epuck_robot.robot_height, colour)
-        self.IR  = Ir_sensors( )
-        
+        self.Dst_rd  = Ir_sensors( )
+
+    #update all sensor of the robot    
+    def update_sensors(self) -> None:
+        self.update_ir_sensors( )
+
     def update_ir_sensors( self ):
-        self.IR.update_sensors( self.id )
+        self.Dst_rd.update_sensors( self.id )
     
     def draw(self):
         super().draw ()
@@ -37,15 +41,15 @@ class Epuck_robot( Diff_drive_robot ):
         glEnable(GL_LIGHTING)
         
         # ---- Draw robot ir sensors rays ----
-        new_ir_angle = np.zeros(self.IR.nb_sensors)
-        full_lenght  = np.zeros(self.IR.nb_sensors)
-        for ir in range(self.IR.nb_sensors):
-            new_ir_angle[ir] = self.rot[2] + self.IR.ir_angle[ir]
+        new_ir_angle = np.zeros(self.Dst_rd.nb_sensors)
+        full_lenght  = np.zeros(self.Dst_rd.nb_sensors)
+        for ir in range(self.Dst_rd.nb_sensors):
+            new_ir_angle[ir] = self.rot[2] + self.Dst_rd.ir_angle[ir]
             if new_ir_angle[ir] < 0.0:
                 new_ir_angle[ir] += 2.0*np.pi
             elif new_ir_angle[ir] > (2.0 * np.pi):
                 new_ir_angle[ir] -= (2.0 * np.pi)
-            full_lenght[ir] = self.radius + self.IR.distance[ir]
+            full_lenght[ir] = self.radius + self.Dst_rd.distance[ir]
             
             x = full_lenght[ir] * np.cos(new_ir_angle[ir])
             z = full_lenght[ir] * np.sin(new_ir_angle[ir])

@@ -7,21 +7,21 @@ class Arena():
     ring                         = np.array([])
     cylinder                     = np.array([])
     cuboid                       = np.array([])
-    epuck                        = np.array([]) #This is the array where it is stored the epuck objects
+    robot                        = np.array([]) #This is the array where it is stored the robot objects
     
     def compute_dist_to_perimetral_wall(ring: Ring, id: np.int64, rob_arena_centre_dist:np.float64, ir_range:np.float64, ir_angle: NDArray[np.float64], distance: NDArray[np.float64] ):
         
-        P = np.array(Arena.epuck[id].pos[0:2], dtype=float)      # centre du robot en 2D
+        P = np.array(Arena.robot[id].pos[0:2], dtype=float)      # centre du robot en 2D
         C = np.array(ring.pos[0:2], dtype=float)                # centre du cercle
         R = float(ring.radius)                          # rayon du cercle
-        r_robot = float(Arena.epuck[id].radius)         # rayon du robot
+        r_robot = float(Arena.robot[id].radius)         # rayon du robot
 
         m = P - C                                   # Vector from circle centre to ray origin
 
         for ir in range(len(ir_angle)):
 
             # Direction of the IR ray in world frame
-            phi = float(Arena.epuck[id].rot[2]) + float(ir_angle[ir])
+            phi = float(Arena.robot[id].rot[2]) + float(ir_angle[ir])
 
             u = np.array([np.cos(phi), np.sin(phi)], dtype=float)  # unité
 
@@ -73,23 +73,23 @@ class Arena():
     
         for ir in range( len(ir_angle) ):
             ray_end_pos = np.array([])
-            ir_angle_in2pi = Arena.epuck[id].rot[2] + ir_angle[ir]
+            ir_angle_in2pi = Arena.robot[id].rot[2] + ir_angle[ir]
             if ( ir_angle_in2pi  >= (2.0 * np.pi) ) :
                 ir_angle_in2pi  -= (2.0 * np.pi)
             elif ( ir_angle_in2pi  < 0.0 ) :
                 ir_angle_in2pi  += (2.0 * np.pi)
-            ray_end_pos = np.append( ray_end_pos, Arena.epuck[id].pos[0] + ((Arena.epuck[id].radius+ir_range) * np.cos(ir_angle_in2pi)) )
-            ray_end_pos = np.append( ray_end_pos, Arena.epuck[id].pos[1] + ((Arena.epuck[id].radius+ir_range) * np.sin(ir_angle_in2pi)) )
+            ray_end_pos = np.append( ray_end_pos, Arena.robot[id].pos[0] + ((Arena.robot[id].radius+ir_range) * np.cos(ir_angle_in2pi)) )
+            ray_end_pos = np.append( ray_end_pos, Arena.robot[id].pos[1] + ((Arena.robot[id].radius+ir_range) * np.sin(ir_angle_in2pi)) )
             
         
             if np.linalg.norm(ray_end_pos - ring.pos[0:2]) > ring.radius:
-                theta = np.arctan2(Arena.epuck[id].pos[1]-ring.pos[1], Arena.epuck[id].pos[0]-ring.pos[0])
+                theta = np.arctan2(Arena.robot[id].pos[1]-ring.pos[1], Arena.robot[id].pos[0]-ring.pos[0])
                 if (theta < 0):
                     theta = (np.pi*2.0) + theta
 
                 if np.around(ir_angle_in2pi, 4) == np.around(theta, 4) :
-                    rob_arena_centre_dist = np.linalg.norm(Arena.epuck[id].pos - ring.pos)
-                    dist[ir] = np.around(ring.radius - rob_arena_centre_dist, 4) - Arena.epuck[id].radius 
+                    rob_arena_centre_dist = np.linalg.norm(Arena.robot[id].pos - ring.pos)
+                    dist[ir] = np.around(ring.radius - rob_arena_centre_dist, 4) - Arena.robot[id].radius 
                 else:
                     if ir_angle_in2pi < theta: 
                         compl_alpha = theta - ir_angle_in2pi
@@ -101,7 +101,7 @@ class Arena():
                     if beta < 0:
                         beta = (2.0 * np.pi) + beta
                     gamma = np.pi - beta - alpha
-                    dist[ir] = ((np.sin(gamma) * ring.radius)/ np.sin(alpha)) - Arena.epuck[id].radius
+                    dist[ir] = ((np.sin(gamma) * ring.radius)/ np.sin(alpha)) - Arena.robot[id].radius
                     if( dist[ir] > ir_range) :
                         print(f"ERROR dist[{ir}] = {dist[ir]}")
                     elif ( dist[ir] < distance[ir] ):
@@ -109,11 +109,11 @@ class Arena():
                     
     def compute_dist_to_robot(id: int, other_id: int,ir_range: float, ir_angle: NDArray[np.float64], distance: NDArray[np.float64]):
 
-            P = np.array(Arena.epuck[id].pos[0:2], dtype=float)           # centre robot courant
-            Q = np.array(Arena.epuck[other_id].pos[0:2], dtype=float)     # centre robot cible
+            P = np.array(Arena.robot[id].pos[0:2], dtype=float)           # centre robot courant
+            Q = np.array(Arena.robot[other_id].pos[0:2], dtype=float)     # centre robot cible
 
-            r_self = float(Arena.epuck[id].radius)
-            r_other = float(Arena.epuck[other_id].radius)
+            r_self = float(Arena.robot[id].radius)
+            r_other = float(Arena.robot[other_id].radius)
 
             # too far -> no computation 
             centre_dist = np.linalg.norm(Q - P)
@@ -124,7 +124,7 @@ class Arena():
             m = P - Q 
 
             # Angle of the current robot in world frame
-            yaw = float(Arena.epuck[id].rot[2])
+            yaw = float(Arena.robot[id].rot[2])
 
             for ir in range(len(ir_angle)):
                 phi = yaw + float(ir_angle[ir])
@@ -165,10 +165,10 @@ class Arena():
     def compute_dist_to_cylinder(id: int, cyl: Cylinder, ir_range: float, ir_angle: NDArray[np.float64], distance: NDArray[np.float64]):
         #similar torobot distance but with cylinder
         
-        P = np.array(Arena.epuck[id].pos[0:2], dtype=float)
+        P = np.array(Arena.robot[id].pos[0:2], dtype=float)
         Q = np.array(cyl.pos[0:2], dtype=float)
 
-        r_self = float(Arena.epuck[id].radius)
+        r_self = float(Arena.robot[id].radius)
         r_cyl  = float(cyl.radius)
 
         centre_dist = np.linalg.norm(Q - P)
@@ -176,7 +176,7 @@ class Arena():
             return
 
         m = P - Q
-        yaw = float(Arena.epuck[id].rot[2])
+        yaw = float(Arena.robot[id].rot[2])
 
         for ir in range(len(ir_angle)):
             phi = yaw + float(ir_angle[ir])
@@ -211,10 +211,10 @@ class Arena():
 
     def compute_dist_to_cuboid(id: int,cub: Cuboid,ir_range: float,ir_angle: NDArray[np.float64],distance: NDArray[np.float64]):
     
-        P = np.array(Arena.epuck[id].pos[0:2], dtype=float)# centre du robot en 2D
+        P = np.array(Arena.robot[id].pos[0:2], dtype=float)# centre du robot en 2D
         C = np.array(cub.pos[0:2], dtype=float)             # centre du cuboid en 2D
 
-        r_self = float(Arena.epuck[id].radius)
+        r_self = float(Arena.robot[id].radius)
 
         hx = 0.5 * float(cub.dim[0]) 
         hy = 0.5 * float(cub.dim[1])  
@@ -241,7 +241,7 @@ class Arena():
         # Origine of rayon in cuboid local frame
         p_local = world_to_local(P - C)
 
-        yaw_r = float(Arena.epuck[id].rot[2])
+        yaw_r = float(Arena.robot[id].rot[2])
 
         eps = 1e-12
         for ir in range(len(ir_angle)):
@@ -291,23 +291,23 @@ class Arena():
 
     def compute_min_dist_to_objects(id: np.int64, ir_range:np.float64, ir_angle: NDArray[np.float64], distance: NDArray[np.float64] ):
         for r in Arena.ring:
-            rob_arena_centre_dist = np.linalg.norm(Arena.epuck[id].pos - r.pos)
-            if np.around( r.radius - (rob_arena_centre_dist + Arena.epuck[id].radius), 2)  > 0 :                
+            rob_arena_centre_dist = np.linalg.norm(Arena.robot[id].pos - r.pos)
+            if np.around( r.radius - (rob_arena_centre_dist + Arena.robot[id].radius), 2)  > 0 :                
                 Arena.compute_dist_to_perimetral_wall(r, id, rob_arena_centre_dist, ir_range, ir_angle, distance)
 
         
         for cyl in Arena.cylinder:
-            rob_cylinder_dist = np.linalg.norm(Arena.epuck[id].pos - cyl.pos)
-            if (rob_cylinder_dist - cyl.radius - Arena.epuck[id].radius) <= ir_range:
+            rob_cylinder_dist = np.linalg.norm(Arena.robot[id].pos - cyl.pos)
+            if (rob_cylinder_dist - cyl.radius - Arena.robot[id].radius) <= ir_range:
                 Arena.compute_dist_to_cylinder(id, cyl, ir_range, ir_angle, distance)
                 
                 
         for cub in Arena.cuboid:
             Arena.compute_dist_to_cuboid(id, cub, ir_range, ir_angle, distance)
                 
-        for e in range(len(Arena.epuck)):
-            if id != Arena.epuck[e].id:
-                other_id = Arena.epuck[e].id
-                rob_rob_dist = np.linalg.norm(Arena.epuck[id].pos - Arena.epuck[other_id].pos)
-                if (rob_rob_dist - Arena.epuck[id].radius - Arena.epuck[other_id].radius) <= ir_range:
+        for e in range(len(Arena.robot)):
+            if id != Arena.robot[e].id:
+                other_id = Arena.robot[e].id
+                rob_rob_dist = np.linalg.norm(Arena.robot[id].pos - Arena.robot[other_id].pos)
+                if (rob_rob_dist - Arena.robot[id].radius - Arena.robot[other_id].radius) <= ir_range:
                     Arena.compute_dist_to_robot(id, other_id, ir_range, ir_angle, distance)
