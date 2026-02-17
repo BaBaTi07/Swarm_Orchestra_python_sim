@@ -46,5 +46,4 @@ class Exp( ):
         for rb in Arena.robot:
             rb.update_sensors( )
             rb.make_movement( np.array(Exp.my_controller[rb.id].update( rb.Dst_rd.reading  )) )
-            #rb.make_movement( np.array([0.4, 0.6]) )
         Exp.iter += 1

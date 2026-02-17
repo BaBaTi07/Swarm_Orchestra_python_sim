@@ -124,7 +124,7 @@ def read_json_file(file_name: str):
         for k, v in section.items():
             if k == "[x,y,z,rx,ry,rz,colour]":
                 if v is None or len(v) == 0:
-                    _log("WARN", "e_pucks list is empty.")
+                    _log("INFO", "e_pucks list is empty.")
                     return
                 arr = np.array(v, dtype=float)
                 for rid in range(len(arr)):
@@ -132,9 +132,10 @@ def read_json_file(file_name: str):
                     if len(row) < 9:
                         _log("WARN", f"e_puck entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
                         continue
+                    global_robot_id = len(Arena.robot)
                     Arena.robot = np.append(
                         Arena.robot,
-                        Epuck_robot(rid, row[0:3], row[3:6], row[6:9], np.zeros(2))
+                        Epuck_robot(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
                     )
             else:
                 _log("WARN", f"Unknown key in 'e_pucks': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
@@ -144,7 +145,7 @@ def read_json_file(file_name: str):
         for k, v in section.items():
             if k == "[x,y,z,rx,ry,rz,colour]":
                 if v is None or len(v) == 0:
-                    _log("WARN", "music_bots list is empty.")
+                    _log("INFO", "music_bots list is empty.")
                     return
                 arr = np.array(v, dtype=float)
                 for rid in range(len(arr)):
@@ -152,9 +153,10 @@ def read_json_file(file_name: str):
                     if len(row) < 9:
                         _log("WARN", f"music_bot entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
                         continue
+                    global_robot_id = len(Arena.robot)
                     Arena.robot = np.append(
                         Arena.robot,
-                        MusicBot(rid, row[0:3], row[3:6], row[6:9], np.zeros(2))
+                        MusicBot(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
                     )
             else:
                 _log("WARN", f"Unknown key in 'music_bots': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
