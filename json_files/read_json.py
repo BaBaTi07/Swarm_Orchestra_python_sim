@@ -34,9 +34,13 @@ def read_json_file(file_name: str):
     seen_sections = set()
 
     #Handlers for each section 
+    def handle_comment(section: dict):
+        for k, v in section.items():
+            _log("INFO", f"{k}: {v}")
+
     def handle_duration(section: dict):
         nonlocal exp_seed
-        known_keys = {"num_trials", "num_iterations", "seed"}
+        known_keys = {"num_trials", "num_iterations", "seed", "delta_t(ms)"}
         for k, v in section.items():
             if k == "num_trials":
                 Exp.num_trials = v
@@ -44,31 +48,27 @@ def read_json_file(file_name: str):
                 Exp.num_iterations = v
             elif k == "seed":
                 exp_seed = int(v)
+            elif k == "delta_t(ms)":
+                MainWindow.delta_t_ms = v
+                if MainWindow.delta_t_ms <= 0:
+                    raise ValueError("arena.delta_t(ms) must be > 0")
+                Diff_drive_robot.delta_t = (1.0 / MainWindow.delta_t_ms)
             else:
                 _log("WARN", f"Unknown key in 'duration': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
-        for must in ("num_trials", "num_iterations", "seed"):
+        for must in ("num_trials", "num_iterations", "seed", "delta_t(ms)"):
             if must not in section:
                 _log("WARN", f"Missing key in 'duration': '{must}'")
 
     def handle_arena(section: dict):
         known_keys = {
-            "delta_t(ms)",
             "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]",
         }
 
         for k, v in section.items():
-            if k == "delta_t(ms)":
-                MainWindow.delta_t_ms = v
-                if MainWindow.delta_t_ms <= 0:
-                    raise ValueError("arena.delta_t(ms) must be > 0")
-                Diff_drive_robot.delta_t = (1.0 / MainWindow.delta_t_ms)
 
-            elif k == "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]":
+            if k == "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]":
 
-                if v is None or len(v) == 0:
-                    _log("WARN", "Arena ring list is empty.")
-                    return
                 for n in range(len(v)):
                     row = v[n]
                     if len(row) < 11:
@@ -81,8 +81,6 @@ def read_json_file(file_name: str):
             else:
                 _log("WARN", f"Unknown key in 'arena': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
-        if "delta_t(ms)" not in section:
-            _log("WARN", "Missing key in 'arena': 'delta_t(ms)'")
 
     def handle_round_obstacle(section: dict):
         known_keys = {"[x,y,z,radius,height,rx,ry,rz,colour]"}
@@ -141,6 +139,7 @@ def read_json_file(file_name: str):
                 _log("WARN", f"Unknown key in 'e_pucks': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
     handlers = {
+        "comment": handle_comment,
         "duration": handle_duration,
         "arena": handle_arena,
         "round_obstacle": handle_round_obstacle,

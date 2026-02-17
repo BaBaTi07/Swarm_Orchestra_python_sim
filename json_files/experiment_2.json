@@ -2,17 +2,22 @@
     "experiment":
     [
         {
+            "comment": {
+                "description": "Round arena with 14 e-pucks and no obstacles"
+            }
+        },
+        {
             "duration":
             {
                 "num_trials": 4,
                 "num_iterations": 700,
-                "seed": 33
+                "seed": 33,
+                "delta_t(ms)": 20
             }
         },
         {
             "arena":
                 {
-                "delta_t(ms)": 20,
                 "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]": [[0.0,0.0,0.0, 2.0,0.05, 0.0,0.0,0.0, 0.0,1.0,1.0]]
                 }
         },

@@ -2,17 +2,22 @@
     "experiment":
     [
         {
+            "comment": {
+                "description": "Round arena with 14 e-pucks, round obstacles and cuboid obstacles"
+            }
+        },
+        {
             "duration":
             {
                 "num_trials": 1,
                 "num_iterations": 7000,
+                "delta_t(ms)": 10,
                 "seed": 33
             }
         },
         {
             "arena":
                 {
-                "delta_t(ms)": 10,
                 "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]": [[0.0,0.0,0.0, 2.0,0.05, 0.0,0.0,0.0, 0.0,1.0,1.0]]
                 }
         },
