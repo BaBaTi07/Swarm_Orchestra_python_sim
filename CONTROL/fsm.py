@@ -64,7 +64,7 @@ class Fsm( ):
         index = [3,4]
         ir = np.delete(ir_readings, index)
         for i in ir:
-            if not i < 0.2:
+            if not i < 0.1:
                 return False
         return True
     
@@ -77,8 +77,8 @@ class Fsm( ):
     #  --------------------------------------------------------
        
     def update ( self, ir_readings: NDArray[np.float64]):
-        self.no_obstacles = self.check_for_collisions( ir_readings )
-        if( self.no_obstacles ):
+        self.no_obstacle = self.check_for_collisions( ir_readings )
+        if( self.no_obstacle ):
             if( self.count_step_forward < (self.forward_movement_length + (np.random.randint(20) - 10)) ):
                 return self.move_forward( )
             else:
