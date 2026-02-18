@@ -7,9 +7,8 @@ from EXP.experiment import *
 from WORLD.epuck import *
 from WORLD.musicbot import *
 from WORLD.shapes import *
+from TOOLS.logger import logger
 
-def _log(level: str, msg: str):
-    print(f"[{level}] {msg}")
 
 
 def read_json_file(file_name: str):
@@ -37,7 +36,7 @@ def read_json_file(file_name: str):
     #Handlers for each section 
     def handle_comment(section: dict):
         for k, v in section.items():
-            _log("INFO", f"{k}: {v}")
+            logger.log("INFO", f"{k}: {v}")
 
     def handle_duration(section: dict):
         nonlocal exp_seed
@@ -57,12 +56,11 @@ def read_json_file(file_name: str):
                     raise ValueError("duration.delta_t(ms) must be > 0")
                 Diff_drive_robot.delta_t = (1.0 /delta_t_ms)
             else:
-                _log("WARN", f"Unknown key in 'duration': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+                logger.log("WARN", f"Unknown key in 'duration': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
         for must in ("num_trials", "num_iterations", "seed", "delta_t(ms)"):
             if must not in section:
-                _log("WARN", f"Missing key in 'duration': '{must}'")
-
+                logger.log("WARN", f"Missing key in 'duration': '{must}'")
     def handle_arena(section: dict):
         known_keys = {
             "perimetral round wall [x,y,z,radius,height,rx,ry,rz,colour]",
@@ -75,14 +73,14 @@ def read_json_file(file_name: str):
                 for n in range(len(v)):
                     row = v[n]
                     if len(row) < 11:
-                        _log("WARN", f"Ring entry #{n} has invalid length {len(row)} (expected 11). Ignored.")
+                        logger.log("WARN", f"Ring entry #{n} has invalid length {len(row)} (expected 11). Ignored.")
                         continue
                     Arena.ring = np.append(
                         Arena.ring,
                         Ring(row[0:3], row[3], row[4], row[5:8], row[8:11])
                     )
             else:
-                _log("WARN", f"Unknown key in 'arena': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+                logger.log("WARN", f"Unknown key in 'arena': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
 
     def handle_round_obstacle(section: dict):
@@ -94,14 +92,14 @@ def read_json_file(file_name: str):
                 for n in range(len(v)):
                     row = v[n]
                     if len(row) < 11:
-                        _log("WARN", f"Cylinder entry #{n} has invalid length {len(row)} (expected 11). Ignored.")
+                        logger.log("WARN", f"Cylinder entry #{n} has invalid length {len(row)} (expected 11). Ignored.")
                         continue
                     Arena.cylinder = np.append(
                         Arena.cylinder,
                         Cylinder(row[0:3], row[3], row[4], row[5:8], row[8:11])
                     )
             else:
-                _log("WARN", f"Unknown key in 'round_obstacle': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+                logger.log("WARN", f"Unknown key in 'round_obstacle': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
     def handle_cuboid_obstacle(section: dict):
         known_keys = {"[x,y,z,l,w,h,rx,ry,rz,colour]"}
@@ -112,14 +110,14 @@ def read_json_file(file_name: str):
                 for n in range(len(v)):
                     row = v[n]
                     if len(row) < 12:
-                        _log("WARN", f"Cuboid entry #{n} has invalid length {len(row)} (expected 12). Ignored.")
+                        logger.log("WARN", f"Cuboid entry #{n} has invalid length {len(row)} (expected 12). Ignored.")
                         continue
                     Arena.cuboid = np.append(
                         Arena.cuboid,
                         Cuboid(row[0:3], row[3:6], row[6:9], row[9:12])
                     )
             else:
-                _log("WARN", f"Unknown key in 'cuboid_obstacle': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+                logger.log("WARN", f"Unknown key in 'cuboid_obstacle': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
     def handle_robot(section_label: str, robot_class):
         """
@@ -133,14 +131,14 @@ def read_json_file(file_name: str):
                 if k == "[x,y,z,rx,ry,rz,colour]":
 
                     if v is None or len(v) == 0:
-                        _log("INFO", f"{section_label} list is empty.")
+                        logger.log("INFO", f"{section_label} list is empty.")
                         return
                     
                     arr = np.array(v, dtype=float)
                     for rid in range(len(arr)):
                         row = arr[rid]
                         if len(row) < 9:
-                            _log("WARN", f"{section_label} entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
+                            logger.log("WARN", f"{section_label} entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
                             continue
 
                         global_robot_id = len(Arena.robot)
@@ -150,7 +148,7 @@ def read_json_file(file_name: str):
                             robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
                         )
                 else:
-                    _log("WARN", f"Unknown key in '{section_label}': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
+                    logger.log("WARN", f"Unknown key in '{section_label}': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
         
         #handler function is returned by handle_robot and added to handlers dict
         return handler 
@@ -168,7 +166,7 @@ def read_json_file(file_name: str):
     # Process each item in the experiment list
     for item_idx, item in enumerate(exp_list):
         if not isinstance(item, dict) or len(item) == 0:
-            _log("WARN", f"Ignoring invalid experiment entry at index {item_idx}: {item}")
+            logger.log("WARN", f"Ignoring invalid experiment entry at index {item_idx}: {item}")
             continue
 
         
@@ -176,20 +174,20 @@ def read_json_file(file_name: str):
             if section_name in handlers:
                 seen_sections.add(section_name)
                 if not isinstance(section_body, dict):
-                    _log("WARN", f"Section '{section_name}' should be a dict, got {type(section_body).__name__}. Ignored.")
+                    logger.log("WARN", f"Section '{section_name}' should be a dict, got {type(section_body).__name__}. Ignored.")
                     continue
                 handlers[section_name](section_body)
             else:
-                _log("WARN", f"Unused/unknown section '{section_name}' (ignored). Try to reformat or update parser.")
+                logger.log("WARN", f"Unused/unknown section '{section_name}' (ignored). Try to reformat or update parser.")
 
     # missing section
     # mandatory
     for req in sorted(required_sections):
         if req not in seen_sections:
-            _log("CRITIC", f"Missing mandatory section '{req}' in JSON.")
+            logger.log("CRITIC", f"Missing mandatory section '{req}' in JSON.")
     # non mandatory
     for sec in sorted(all_sections):
         if sec not in seen_sections:
-            _log("INFO", f"Non mandatory section '{sec}' not found in JSON.")
+            logger.log("INFO", f"Non mandatory section '{sec}' not found in JSON.")
 
     return exp_seed, delta_t_ms

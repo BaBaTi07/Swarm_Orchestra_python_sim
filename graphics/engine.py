@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
 from GRAPHICS.viewer import Viewer
 from EXP.experiment import Exp
 from WORLD.arena import Arena
-from json_files.read_json import read_json_file
+from TOOLS.read_json import read_json_file
+from TOOLS.logger import logger
 
 class Engine( QWidget ):
     def __init__(self, viewer: Viewer, delta_t_ms):
@@ -42,7 +43,7 @@ class Engine( QWidget ):
         Exp.reset()
 
         exp_seed, delta_t_ms = read_json_file(json_path)
-        print("RELOAD delta_t_ms:", delta_t_ms, "base_delta_t_ms:", self.base_delta_t_ms)
+        logger.log("DEBUG", f"RELOAD delta_t_ms: {delta_t_ms}, base_delta_t_ms: {self.base_delta_t_ms}")
 
         if exp_seed is not None:
             np.random.seed(int(exp_seed))
