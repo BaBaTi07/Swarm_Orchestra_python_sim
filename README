@@ -58,6 +58,14 @@ To run the simulator without the graphics:
 > python3 main.py -s (INT) -f json_files/(file_name)
 Es: >python3 main.py -s 26265 -f jason_files/experiment_1.json
 
+TO adjust the log level (DEBUG, INFO, WARN, ERROR, NONE):
+> python3 main.py -s (INT) -f json_files/(file_name) -l (LOG_LEVEL)
+ES: >python3 main.py -s 26265 -f jason_files/experiment_1.json -l DEBUG
+
+IF no json file is specified, the simulator runs with an empty experiment (the json file can be change within the run-time interface)
+> python3 main.py -s (INT) -v true
+Es: >python3 main.py -s 26265 -v true
+
 By adding & at the and, the simulator runs in background:
 > python3 main.py -s (INT) -f json_files/(file_name) &
 Es: >python3 main.py -s 26265 -f jason_files/experiment_1.json &
