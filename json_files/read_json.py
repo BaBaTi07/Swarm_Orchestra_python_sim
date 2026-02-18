@@ -22,6 +22,7 @@ def read_json_file(file_name: str):
         raise ValueError(f"Invalid JSON in '{file_name}': {e}")
 
     exp_seed = 0
+    delta_t_ms = 0
 
     #validate global structure of JSON
     exp_list = data.get("experiment", None)
@@ -40,6 +41,8 @@ def read_json_file(file_name: str):
 
     def handle_duration(section: dict):
         nonlocal exp_seed
+        nonlocal delta_t_ms
+        
         known_keys = {"num_trials", "num_iterations", "seed", "delta_t(ms)"}
         for k, v in section.items():
             if k == "num_trials":
@@ -49,10 +52,10 @@ def read_json_file(file_name: str):
             elif k == "seed":
                 exp_seed = int(v)
             elif k == "delta_t(ms)":
-                MainWindow.delta_t_ms = v
-                if MainWindow.delta_t_ms <= 0:
-                    raise ValueError("arena.delta_t(ms) must be > 0")
-                Diff_drive_robot.delta_t = (1.0 / MainWindow.delta_t_ms)
+                delta_t_ms = float(v)
+                if delta_t_ms <= 0:
+                    raise ValueError("duration.delta_t(ms) must be > 0")
+                Diff_drive_robot.delta_t = (1.0 /delta_t_ms)
             else:
                 _log("WARN", f"Unknown key in 'duration': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
@@ -189,4 +192,4 @@ def read_json_file(file_name: str):
         if sec not in seen_sections:
             _log("INFO", f"Non mandatory section '{sec}' not found in JSON.")
 
-    return exp_seed
+    return exp_seed, delta_t_ms

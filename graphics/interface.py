@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QSize
-from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QToolButton, QVBoxLayout, QHBoxLayout, QSpinBox, QLabel
+from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QToolButton, QVBoxLayout, QHBoxLayout, QSpinBox, QLabel, QFileDialog
 
 from GRAPHICS.viewer import Viewer
 from GRAPHICS.engine import Engine
@@ -9,11 +9,11 @@ from EXP.experiment import Exp
 class MainWindow(QMainWindow):
     delta_t_ms = 0.0
     
-    def __init__(self):
+    def __init__(self, delta_t_ms):
         # Configure main window 
         super().__init__()
         self.viewer = Viewer( )
-        self.eng    = Engine( self.viewer, MainWindow.delta_t_ms)
+        self.eng    = Engine( self.viewer, delta_t_ms)
         # self.viewer.setMinimumHeight(300);
         self.viewer.resize(600, 600)
         self.setWindowTitle("E-puck simulator (version 0.1)")
@@ -35,7 +35,10 @@ class MainWindow(QMainWindow):
         container = QWidget()
         container.setLayout(self.mainlayout)
         self.setCentralWidget(container)
-        
+    
+    def reset_run_buttons( self ):    
+        self.button_2.setText("Run")
+        self.button_2.setChecked(False)
 
     def create_buttons( self ):
         self.button_1 = QToolButton()
@@ -64,6 +67,11 @@ class MainWindow(QMainWindow):
         self.button_fast.setText("Speed")
         self.button_fast.clicked.connect(self.toggle_fast_mode)
 
+        # Load JSON button
+        self.button_load = QToolButton()
+        self.button_load.setText("Load JSON")
+        self.button_load.clicked.connect(self.load_json)
+
         
         # # Input time interval
         self.spin_ms = QSpinBox()
@@ -88,6 +96,7 @@ class MainWindow(QMainWindow):
         self.buttonslayout.addWidget(self.delay_label)
         self.buttonslayout.addWidget(self.spin_ms)
         self.buttonslayout.addWidget(self.eng.label)
+        self.buttonslayout.addWidget(self.button_load)
         
     def re_init( self ):
         self.eng.re_init()
@@ -125,7 +134,16 @@ class MainWindow(QMainWindow):
     def on_value_changed(self, value):
         self.delay_label.setText(f"Actual delay (ms): {value}")
         self.eng.set_delay_on_delta_t_ms(value)
-            
+
+    def load_json(self):
+        # Open a file dialog to select a JSON file from /json_files directory
+        path, _ = QFileDialog.getOpenFileName(self, "Load JSON File", "./json_files", "JSON Files (*.json)")
+
+        if path:
+            self.eng.reload_experiment(path)
+            self.reset_run_buttons()
+
+
     def close( self ):
         QApplication.instance().quit()
     

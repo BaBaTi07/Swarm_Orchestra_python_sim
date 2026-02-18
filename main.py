@@ -41,7 +41,7 @@ if __name__ == "__main__" :
     flag_viewing = False
     f_name = ""
     n_seed, f_name, flag_viewing = preamble( )
-    seed_from_file = read_json_file(f_name)
+    seed_from_file, delta_t_ms = read_json_file(f_name)
     if n_seed == None:
         n_seed = seed_from_file    
     np.random.seed(n_seed)
@@ -49,7 +49,7 @@ if __name__ == "__main__" :
     
     if flag_viewing:
         app = QApplication([]) # create the QApplication
-        window = MainWindow( ) # create the main window
+        window = MainWindow(delta_t_ms) # create the main window
         window.show()
         app.exec() # start the event loop
     else:

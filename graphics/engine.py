@@ -1,8 +1,11 @@
 from PyQt6.QtCore import Qt, QTimer
+import numpy as np
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
 from GRAPHICS.viewer import Viewer
 from EXP.experiment import Exp
+from WORLD.arena import Arena
+from json_files.read_json import read_json_file
 
 class Engine( QWidget ):
     def __init__(self, viewer: Viewer, delta_t_ms):
@@ -31,6 +34,31 @@ class Engine( QWidget ):
 
         self._apply_timer_interval()
     
+    def reload_experiment(self, json_path: str):
+        
+        self.stop_main_timer()
+
+        Arena.reset()
+        Exp.reset()
+
+        exp_seed, delta_t_ms = read_json_file(json_path)
+        print("RELOAD delta_t_ms:", delta_t_ms, "base_delta_t_ms:", self.base_delta_t_ms)
+
+        if exp_seed is not None:
+            np.random.seed(int(exp_seed))
+        if delta_t_ms is not None:
+            self.base_delta_t_ms = float(delta_t_ms)
+            self._apply_timer_interval()
+
+        # 4) Re-init engine state
+        self.time_ms = 0
+        self.isAllTrialsInit = False
+        self.isSingleTrialInit = False
+        self.label.setText(f"Time: {self.time_ms} ms, Trial = {Exp.trial}, Iteration = {Exp.iter}")
+
+        # 5) Trigger redraw
+        self.viewer.update()
+
     #internal method to compute the effective interval based on base delta_t, delay and speed multiplier
     def _effective_interval_ms(self) -> int:
         eff = (self.base_delta_t_ms + float(self.delay_ms)) / float(self.speed_multiplier)

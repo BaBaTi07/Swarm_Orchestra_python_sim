@@ -8,6 +8,12 @@ class Arena():
     cylinder                     = np.array([])
     cuboid                       = np.array([])
     robot                        = np.array([]) #This is the array where it is stored the robot objects
+    def reset():
+        Arena.DeltaT   = np.array([])
+        Arena.ring     = np.array([])
+        Arena.cylinder = np.array([])
+        Arena.cuboid   = np.array([])
+        Arena.robot    = np.array([])
     
     def compute_dist_to_perimetral_wall(ring: Ring, id: np.int64, rob_arena_centre_dist:np.float64, ir_range:np.float64, ir_angle: NDArray[np.float64], distance: NDArray[np.float64] ):
         

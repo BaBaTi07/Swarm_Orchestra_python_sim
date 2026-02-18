@@ -9,6 +9,13 @@ class Exp( ):
     trial         = 0
     iter          = 0
  
+    def reset():
+        Exp.my_controller = np.array([])
+        Exp.trial = 0
+        Exp.iter  = 0
+        Exp.num_trials = 0
+        Exp.num_iterations = 0
+        
     def init_all_trials():
         Exp.trial = 0
         for e in range (len(Arena.robot)):
