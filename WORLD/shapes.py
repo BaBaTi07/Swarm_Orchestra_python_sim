@@ -52,7 +52,7 @@ class Cuboid (Shapes):
     def draw(self):
         glPushMatrix()
         # Translation of cuboud body
-        glTranslatef(self.pos[0], self.pos[2], self.pos[1])
+        glTranslatef(self.pos[0], self.pos[2]+self.dim[2]/2, self.pos[1])
         #Rotation of the cuboid body
         DEG_rot = np.rad2deg(self.rot) # from RADIANTS to DEGREES
         glRotatef(DEG_rot[0], 1.0, 0.0, 0.0)
@@ -101,6 +101,29 @@ class Cuboid (Shapes):
         glVertex3f(-s,  s, -s)
 
         glEnd()
+        
+        # ----- 2) Arêtes noires (wireframe) -----
+        glDisable(GL_LIGHTING)
+        glColor3f(0.0, 0.0, 0.0)
+        glLineWidth(2.0)
+
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        glBegin(GL_QUADS)
+
+        # EXACTEMENT les mêmes faces
+        glVertex3f(-s, -s,  s); glVertex3f( s, -s,  s); glVertex3f( s,  s,  s); glVertex3f(-s,  s,  s)
+        glVertex3f(-s, -s, -s); glVertex3f(-s,  s, -s); glVertex3f( s,  s, -s); glVertex3f( s, -s, -s)
+        glVertex3f(-s,  s, -s); glVertex3f(-s,  s,  s); glVertex3f( s,  s,  s); glVertex3f( s,  s, -s)
+        glVertex3f(-s, -s, -s); glVertex3f( s, -s, -s); glVertex3f( s, -s,  s); glVertex3f(-s, -s,  s)
+        glVertex3f( s, -s, -s); glVertex3f( s,  s, -s); glVertex3f( s,  s,  s); glVertex3f( s, -s,  s)
+        glVertex3f(-s, -s, -s); glVertex3f(-s, -s,  s); glVertex3f(-s,  s,  s); glVertex3f(-s,  s, -s)
+
+        glEnd()
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+
+        glLineWidth(1.0)
+        glEnable(GL_LIGHTING)
+
         glPopMatrix()
         
         
@@ -132,7 +155,7 @@ class Cylinder(Shapes):
             glVertex3f(self.radius * x, 0.0, self.radius * z)
             glVertex3f(self.radius * x, self.height, self.radius * z)
         glEnd()
-        
+
         # ---- Lower side ----
         glNormal3f(0, -1, 0)
         glBegin(GL_TRIANGLE_FAN)
@@ -149,6 +172,26 @@ class Cylinder(Shapes):
             a = i * step
             glVertex3f(self.radius * np.cos(a), self.height, self.radius * np.sin(a))
         glEnd()
+        
+        # ---- Contours noirs des disques (bas + haut) ----
+        glDisable(GL_LIGHTING)
+        glColor3f(0.0, 0.0, 0.0)
+        glLineWidth(2.0)
+
+        glBegin(GL_LINE_LOOP)
+        for i in range(slices):
+            a = i * step
+            glVertex3f(self.radius * np.cos(a), 0.0, self.radius * np.sin(a))
+        glEnd()
+
+        glBegin(GL_LINE_LOOP)
+        for i in range(slices):
+            a = i * step
+            glVertex3f(self.radius * np.cos(a), self.height, self.radius * np.sin(a))
+        glEnd()
+
+        glLineWidth(1.0)
+        glEnable(GL_LIGHTING)
         glPopMatrix()
 
 class Diff_drive_robot(Cylinder):
