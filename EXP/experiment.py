@@ -1,6 +1,7 @@
 import numpy as np
 from CONTROL.fsm import *
 from WORLD.arena import *
+from TOOLS.logger import logger
 
 class Exp( ):
     num_trials     = 0
@@ -15,7 +16,7 @@ class Exp( ):
         Exp.iter  = 0
         Exp.num_trials = 0
         Exp.num_iterations = 0
-        
+
     def init_all_trials():
         Exp.trial = 0
         for e in range (len(Arena.robot)):
@@ -52,5 +53,9 @@ class Exp( ):
     def make_iteration():
         for rb in Arena.robot:
             rb.update_sensors( )
-            rb.make_movement( np.array(Exp.my_controller[rb.id].update( rb.Dst_rd.reading  )) )
+            wheels, music_event = Exp.my_controller[rb.id].update( rb.Dst_rd.reading  )
+            rb.make_movement( np.array(wheels) )
+            if music_event is not None and hasattr(rb, 'play_note'):
+                logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
+                rb.play_note(music_event[0], music_event[1], volume=music_event[2])
         Exp.iter += 1

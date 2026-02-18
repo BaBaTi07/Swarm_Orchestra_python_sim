@@ -49,6 +49,7 @@ if __name__ == "__main__" :
     n_seed = None
     flag_viewing = False
     f_name = ""
+    MusicModule.init_global(num_mixer_channels=128)
     n_seed, f_name, flag_viewing = preamble( )
     seed_from_file, delta_t_ms = read_json_file(f_name)
     if n_seed == None:

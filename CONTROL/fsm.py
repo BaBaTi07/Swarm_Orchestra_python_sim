@@ -13,6 +13,7 @@ class Fsm( ):
         self.turning_side_already_computed   = False
         self.no_obstacle                     = True
         self.output                          = np.zeros(2)
+        self.just_hit_obstacle               = False
 
      #  --------------------------------------------------------
     
@@ -78,10 +79,20 @@ class Fsm( ):
        
     def update ( self, ir_readings: NDArray[np.float64]):
         self.no_obstacle = self.check_for_collisions( ir_readings )
+
+        note_event = None
+        if (not self.no_obstacle) and (not self.just_hit_obstacle):
+            # exemple: DO4 = MIDI 60
+            note_event = (int(12*np.random.rand())+60, 0.15 + 1.0*np.random.rand(), 1.0*np.random.rand())   # (midi, duration_s, volume)
+            self.just_hit_obstacle = True
+
         if( self.no_obstacle ):
+            self.just_hit_obstacle = False
             if( self.count_step_forward < (self.forward_movement_length + (np.random.randint(20) - 10)) ):
-                return self.move_forward( )
+                wheels = self.move_forward( )
             else:
-                return self.turn_on_spot( )
+                wheels = self.turn_on_spot( )
         else:
-            return self.turn_to_avoid_obstacle( )
+            wheels = self.turn_to_avoid_obstacle( )
+
+        return wheels, note_event

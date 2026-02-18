@@ -29,7 +29,7 @@ class MusicBot(Diff_drive_robot):
         self.ir_comm = IRComm()
 
         # --- Music module (placeholder) ---
-        self.music = MusicModule()
+        self.music = MusicModule(channel_id = int(self.id))  # Each robot has its own music channel
 
     #update all sensor of th robot    
     def update_sensors(self) -> None:
@@ -38,9 +38,12 @@ class MusicBot(Diff_drive_robot):
 
     def update_ultrasonic_sensors(self) -> None:
         self.Dst_rd.update_sensors(self.id)
+    
+    def play_note(self, note: str, duration_s: float, volume: float = 1.0):
+        self.music.play_note(note, duration_s, volume) 
 
     def draw(self):
-        # Draw body (Diff_drive_robot / Cylinder etc.)
+        
         super().draw()
 
         glPushMatrix()
