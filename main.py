@@ -36,10 +36,10 @@ def preamble( ):
         if args.log in logger.levels:
             logger.curent_level = args.log
         else:
-            print(f"Invalid log level '{args.log}'. Valid levels are: {sorted(logger.levels.keys())} running with default level INFO.")
-            logger.curent_level = "INFO"
+            print(f"Invalid log level '{args.log}'. Valid levels are: {sorted(logger.levels.keys())} running with default level NONE.")
+            logger.curent_level = "NONE"
     else:
-        logger.curent_level = "INFO"
+        logger.curent_level = "NONE"
         
     return n_seed, f_name, flag_viewing
 
