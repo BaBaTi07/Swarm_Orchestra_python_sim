@@ -54,7 +54,9 @@ def read_json_file(file_name: str):
                 delta_t_ms = float(v)
                 if delta_t_ms <= 0:
                     raise ValueError("duration.delta_t(ms) must be > 0")
-                Diff_drive_robot.delta_t = (1.0 /delta_t_ms)
+                # Set the global delta_t for the simulation (used by robots and experiment)
+                Diff_drive_robot.delta_t = (delta_t_ms/1000.0)  # Convert ms to seconds
+                Exp.dt_s = Diff_drive_robot.delta_t
             else:
                 logger.log("WARN", f"Unknown key in 'duration': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
 
@@ -143,10 +145,17 @@ def read_json_file(file_name: str):
 
                         global_robot_id = len(Arena.robot)
 
-                        Arena.robot = np.append(
-                            Arena.robot,
-                            robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2))
-                        )
+                        if section_label == "music_bots":
+                            Arena.robot = np.append(
+                                Arena.robot,
+                                robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2), midi_recorder=Exp.midi)  # Pass the global MIDI recorder to the robot
+                            )
+                        elif section_label == "e_pucks":
+                            Arena.robot = np.append(
+                                Arena.robot,
+                                robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2)) # Epuck does not use MIDI recorder
+                            )
+                            
                 else:
                     logger.log("WARN", f"Unknown key in '{section_label}': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
         

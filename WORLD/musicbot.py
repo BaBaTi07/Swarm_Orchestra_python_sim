@@ -4,6 +4,7 @@ from numpy.typing import NDArray
 from SENSORS.ultrasonic_sensors import Ultrasonic_sensors
 from SENSORS.ir_comm import IRComm
 from SENSORS.music_module import MusicModule
+from MIDI.midi_recorder import MidiRecorder
 
 from WORLD.shapes import Diff_drive_robot
 from OpenGL.GL import (
@@ -20,16 +21,24 @@ class MusicBot(Diff_drive_robot):
     wheel_distance = 0.250   # placeholder (m) TO Change
     wheel_radius   = 0.030   # placeholder (m)
 
-    def __init__(self, id: np.int64, pos: NDArray[np.float64], rot: NDArray[np.float64], colour: NDArray[np.float64], linear_vel: NDArray[np.float64]):
-        super().__init__(id=id, pos=pos, rot=rot, linear_vel=linear_vel, wheel_distance=MusicBot.wheel_distance, wheel_radius=MusicBot.wheel_radius, radius=MusicBot.robot_radius, height=MusicBot.robot_height, colour=colour)
+    def __init__(self, id: np.int64, pos: NDArray[np.float64], rot: NDArray[np.float64],
+                  colour: NDArray[np.float64], linear_vel: NDArray[np.float64],midi_recorder: MidiRecorder | None = None):
+        
+        super().__init__(id=id, pos=pos, rot=rot, linear_vel=linear_vel, wheel_distance=MusicBot.wheel_distance,
+                          wheel_radius=MusicBot.wheel_radius, radius=MusicBot.robot_radius, height=MusicBot.robot_height, colour=colour)
 
+        # --- Ultrasonic sensors ---
         self.Dst_rd = Ultrasonic_sensors()
 
         # --- IR communication (placeholder) ---
         self.ir_comm = IRComm()
 
-        # --- Music module (placeholder) ---
+        # --- Music module ---
         self.music = MusicModule(channel_id = int(self.id))  # Each robot has its own music channel
+
+        # --- MIDI recorder ---
+        self.midi_recorder = midi_recorder  
+
 
     #update all sensor of th robot    
     def update_sensors(self) -> None:
@@ -39,8 +48,19 @@ class MusicBot(Diff_drive_robot):
     def update_ultrasonic_sensors(self) -> None:
         self.Dst_rd.update_sensors(self.id)
     
-    def play_note(self, note: str, duration_s: float, volume: float = 1.0):
+    def play_note(self, note: str, duration_s: float, volume: float = 1.0, now_s: float|None = None):
+        # audio
         self.music.play_note(note, duration_s, volume) 
+        # midi recording
+        if self.midi_recorder is not None and now_s is not None:
+            self.midi_recorder.record_note(
+                track_id=self.id,          # 1 track par robot
+                pitch=note,
+                start_s=now_s,
+                duration_s=duration_s,
+                volume_0_1=volume
+            )
+
 
     def draw(self):
         

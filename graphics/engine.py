@@ -80,7 +80,7 @@ class Engine( QWidget ):
         mult = float(mult)
         self.speed_multiplier = mult
         self._apply_timer_interval()
-        print("speed:", self.speed_multiplier, "timer interval:", self.timer.interval())
+        logger.log("DEBUG", f"speed: {self.speed_multiplier}, timer interval: {self.timer.interval()}")
         
     def start_timer(self):
         if not self.timer.isActive():
