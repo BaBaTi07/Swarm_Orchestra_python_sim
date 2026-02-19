@@ -14,6 +14,7 @@ def preamble( ):
     parser.add_argument("-file", type=str, help="add a json_files/file_name with details of the experiment")
     parser.add_argument("-viewing", type=bool, help="if true it triggers the graphical mode")
     parser.add_argument("-log", type=str, help="set the log level (DEBUG, INFO, WARN, ERROR, NONE)")
+    parser.add_argument("-instrument", type=str, help="set the instrument directory (if none -> Basic sound waveforms will be used)")
     parser.set_defaults(seed = 0, viewing=False)
     args = parser.parse_args()
     
@@ -40,8 +41,13 @@ def preamble( ):
             logger.curent_level = "NONE"
     else:
         logger.curent_level = "NONE"
+    
+    if args.instrument:
+        instrument_path = args.instrument
+    else:
+        instrument_path = None
         
-    return n_seed, f_name, flag_viewing
+    return n_seed, f_name, flag_viewing, instrument_path
 
     
 if __name__ == "__main__" :
@@ -49,9 +55,13 @@ if __name__ == "__main__" :
     n_seed = None
     flag_viewing = False
     f_name = ""
+    
+    n_seed, f_name, flag_viewing, instrument_path = preamble( )
+    
     MusicModule.init_global(num_mixer_channels=128)
-    MusicModule.set_instrument_samples("assets/instruments/piano", preload=True)
-    n_seed, f_name, flag_viewing = preamble( )
+    if instrument_path is not None:
+        MusicModule.set_instrument_samples(instrument_path, preload=True)
+        
     seed_from_file, delta_t_ms = read_json_file(f_name)
     if n_seed == None:
         n_seed = seed_from_file    

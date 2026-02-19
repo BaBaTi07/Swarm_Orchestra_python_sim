@@ -66,6 +66,10 @@ IF no json file is specified, the simulator runs with an empty experiment (the j
 > python3 main.py -s (INT) -v true
 Es: >python3 main.py -s 26265 -v true
 
+TO chose a custom instrument (if no instrument is specified, the simulator uses basic sound waveforms):
+> python3 main.py -s (INT) -f json_files/(file_name) -i (instrument_dir)
+Es: >python3 main.py -s 26265 -v true -f jason_files/experiment_1.json -i assets/instruments/piano
+
 By adding & at the and, the simulator runs in background:
 > python3 main.py -s (INT) -f json_files/(file_name) &
 Es: >python3 main.py -s 26265 -f jason_files/experiment_1.json &
