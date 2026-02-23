@@ -77,13 +77,16 @@ class Fsm( ):
             
     #  --------------------------------------------------------
        
-    def update ( self, ir_readings: NDArray[np.float64]):
+    def update ( self, ir_readings: NDArray[np.float64], msgs: list ):
         self.no_obstacle = self.check_for_collisions( ir_readings )
 
         note_event = None
+        msg_snd = None
+
         if (not self.no_obstacle) and (not self.just_hit_obstacle):
             # exemple: DO4 = MIDI 60
             note_event = (int(13*np.random.rand())+60, 0.1+1.0*np.random.rand(), 0.8*np.random.rand())   # (midi, duration_s, volume)
+            msg_snd = 666
             self.just_hit_obstacle = True
 
         if( self.no_obstacle ):
@@ -95,4 +98,4 @@ class Fsm( ):
         else:
             wheels = self.turn_to_avoid_obstacle( )
 
-        return wheels, note_event
+        return wheels, note_event, msg_snd

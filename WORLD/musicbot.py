@@ -5,6 +5,8 @@ from SENSORS.ultrasonic_sensors import Ultrasonic_sensors
 from SENSORS.ir_comm import IRComm
 from SENSORS.music_module import MusicModule
 from MIDI.midi_recorder import MidiRecorder
+from SENSORS.ir_comm import IRComm, IRCommConfig
+
 
 from WORLD.shapes import Diff_drive_robot
 from OpenGL.GL import (
@@ -31,7 +33,14 @@ class MusicBot(Diff_drive_robot):
         self.Dst_rd = Ultrasonic_sensors()
 
         # --- IR communication (placeholder) ---
-        self.ir_comm = IRComm()
+        self.ir_comm = IRComm(robot_id=int(self.id), config=IRCommConfig( 
+            range_m=0.5,
+            fov_deg=180.0,
+            max_process_rate_s=6.0,
+            max_inbox=64,
+            drop_prob=0.0,       
+            enabled=True         
+        ))
 
         # --- Music module ---
         self.music = MusicModule(channel_id = int(self.id))  # Each robot has its own music channel

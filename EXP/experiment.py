@@ -6,6 +6,7 @@ from MIDI.midi_recorder import MidiRecorder
 from WORLD.musicbot import MusicBot
 from datetime import datetime
 from pathlib import Path
+from SENSORS.ir_comm import IRMedium, IRCommConfig
 
 class Exp( ):
     num_trials     = 0
@@ -16,6 +17,14 @@ class Exp( ):
     dt_s          = 0.2
     sim_time_s     = 0.0
     midi          = MidiRecorder(tempo_bpm=120.0)  # Global MIDI recorder for the experiment
+    ir_medium      = IRMedium(config=IRCommConfig( 
+        range_m=0.5,
+        fov_deg=180.0,
+        max_process_rate_s=6.0,
+        max_inbox=64,
+        drop_prob=0.0,       
+        enabled=True         
+    ))
  
     def reset():
         Exp.my_controller = np.array([])
@@ -40,6 +49,7 @@ class Exp( ):
 
         # Start the Midi recording if the robots are music bots
         if any(isinstance(rb, MusicBot) for rb in Arena.robot):
+            
             if not Exp.midi.is_enabled():
                 Exp.midi.start()  # Start MIDI recording for the trial
                 logger.log("INFO", f"Trial {Exp.trial+1} started. MIDI recording enabled.")
@@ -81,13 +91,31 @@ class Exp( ):
         return folder / f"{base_name}_{timestamp}.mid"
 
     def make_iteration():
-        for rb in Arena.robot:
-            rb.update_sensors()
-            wheels, music_event = Exp.my_controller[rb.id].update( rb.Dst_rd.reading)
-            rb.make_movement(np.array(wheels))
+        now_s = Exp.sim_time_s
+        dt_s = Exp.dt_s
 
+        Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
+
+        for rb in Arena.robot:
+            msgs = []
+            # Consume IR messages if the robot has a communication module
+            if hasattr(rb, 'ir_comm') and rb.ir_comm is not None:
+                msgs = rb.ir_comm.consume(time_s=now_s, dt_s=dt_s)
+                if msgs:
+                    logger.log("DEBUG", f"Robot {rb.id} received IR messages: {msgs}")
+            
+            # Update sensors
+            rb.update_sensors()
+            wheels, music_event, msg_snd = Exp.my_controller[rb.id].update( rb.Dst_rd.reading, msgs)
+            rb.make_movement(np.array(wheels))
+            
+            # Send IR message if any
+            if msg_snd is not None and hasattr(rb, 'ir_comm') and rb.ir_comm is not None:
+                rb.ir_comm.send(payload=msg_snd, time_s=now_s)
+
+            # Play music event if any
             if music_event is not None and hasattr(rb, 'play_note'):
                 logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
-                rb.play_note(music_event[0], music_event[1], volume=music_event[2], now_s=Exp.sim_time_s)
+                rb.play_note(music_event[0], music_event[1], volume=music_event[2], now_s=now_s)
         Exp.iter += 1
-        Exp.sim_time_s += Exp.dt_s
+        Exp.sim_time_s += dt_s
