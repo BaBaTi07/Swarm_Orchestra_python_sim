@@ -81,12 +81,12 @@ class Fsm( ):
         self.no_obstacle = self.check_for_collisions( ir_readings )
 
         note_event = None
-        msg_snd = None
+        msg_snd = 666
 
         if (not self.no_obstacle) and (not self.just_hit_obstacle):
             # exemple: DO4 = MIDI 60
             note_event = (int(13*np.random.rand())+60, 0.1+1.0*np.random.rand(), 0.8*np.random.rand())   # (midi, duration_s, volume)
-            msg_snd = 666
+            
             self.just_hit_obstacle = True
 
         if( self.no_obstacle ):

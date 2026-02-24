@@ -35,9 +35,11 @@ class MusicBot(Diff_drive_robot):
         # --- IR communication (placeholder) ---
         self.ir_comm = IRComm(robot_id=int(self.id), config=IRCommConfig( 
             range_m=0.5,
+            robot_rad_m=MusicBot.robot_radius,
             fov_deg=180.0,
             max_process_rate_s=6.0,
-            max_inbox=64,
+            max_inbox=3,
+            msg_ttl_s = 0.5,
             drop_prob=0.0,       
             enabled=True         
         ))
@@ -89,6 +91,25 @@ class MusicBot(Diff_drive_robot):
         glVertex3f(x, self.height + 0.001, z)
         glEnd()
         glLineWidth(1.0)
+        glEnable(GL_LIGHTING)
+
+        # draw IR communication rays 
+        ir_fov_rad = np.deg2rad(self.ir_comm.cfg.fov_deg)
+        n_sectors = self.ir_comm.cfg.num_captors
+        sector_angle = ir_fov_rad / float(n_sectors)
+        len = self.ir_comm.cfg.range_m
+        for i in range(n_sectors+1):
+            angle = self.rot[2] - 0.5 * ir_fov_rad + float(i) * sector_angle
+            x = self.radius * np.cos(angle)
+            z = self.radius * np.sin(angle)
+            len
+            glDisable(GL_LIGHTING)
+            glLineWidth(1.0)
+            glColor3f(1.0, 0.0, 0.0)  #red
+            glBegin(GL_LINES)
+            glVertex3f(x, self.height + 0.002, z)
+            glVertex3f(x + len * np.cos(angle), self.height + 0.002, z + len * np.sin(angle))
+            glEnd()
         glEnable(GL_LIGHTING)
 
         # Draw ultrasonic rays

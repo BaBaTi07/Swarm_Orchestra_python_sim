@@ -9,15 +9,19 @@ class IRMessage:
     sender_id: int
     payload: int          # 0..255 (8 bits)
     time_s: float
+    captor_id: int
     strenght: float = 1.0     # optionnel (0..1)
-
+    
 
 @dataclass
 class IRCommConfig:
     range_m: float = 0.5
+    robot_rad_m: float = 0.15
     fov_deg: float = 180.0
+    num_captors: int = 6
     max_process_rate_s: float = 6.0
-    max_inbox: int = 64  
+    msg_ttl_s: float = 0.5
+    max_inbox: int = 3 
     drop_prob: float = 0.0 
     enabled: bool = True
 
@@ -84,6 +88,11 @@ class IRComm:
         #accumulation de token (max 0.5s)
         self._tokens = min(self._tokens, self.cfg.max_process_rate_s * 0.5)
 
+        # purge messages expirés
+        ttl = float(self.cfg.msg_ttl_s)
+        while self._inbox and (time_s - self._inbox[0].time_s) > ttl:
+            self._inbox.popleft()
+
         n = int(min(len(self._inbox), np.floor(self._tokens)))
         msgs = []
         for _ in range(n):
@@ -106,6 +115,29 @@ class IRMedium:
     def _angle_wrap_pi(a: float) -> float:
         return (a + np.pi) % (2.0 * np.pi) - np.pi
 
+    @staticmethod
+    def _rel_angle_to_sector(rel_angle_rad: float, fov_rad: float, n_sectors: int) -> int:
+        """
+        rel_angle_rad: angle relatif entre receveur et émetteur
+        fov_rad: champ de vision du receveur en radians
+        n_sectors: nombre de secteurs à discrétiser dans le champ de vision
+        Retourne l'index du secteur (0..n-1)
+        """
+        n = int(max(1, n_sectors))
+        half = 0.5 * float(fov_rad)
+
+        # clamp 
+        a = float(np.clip(rel_angle_rad, -half, half))
+
+        # normaliser sur [0,1]
+        x = (a + half) / (2.0 * half) if half > 0 else 0.5
+
+        # index [0..n-1]
+        idx = int(np.floor(x * n))
+        if idx >= n:
+            idx = n - 1
+        return idx
+
     def step(self, robots: np.ndarray, time_s: float, dt_s: float):
 
         if not self.cfg.enabled:
@@ -125,7 +157,8 @@ class IRMedium:
 
         # 2) Distribution: pour chaque msg, tester tous les receveurs
         fov_rad_half = np.deg2rad(self.cfg.fov_deg) * 0.5
-        range_m = float(self.cfg.range_m)
+
+        range_m = float(self.cfg.range_m )
 
         # Précompute positions/yaw pour efficacité
         pos = {int(rb.id): np.array(rb.pos[0:2], dtype=float) for rb in robots}
@@ -147,23 +180,39 @@ class IRMedium:
 
                 Pr = pos[rid]
                 v = Ps - Pr
-                d = float(np.linalg.norm(v))
+                d_c = float(np.linalg.norm(v))  # distance depuis le centre des robots
+                d = max(0.0, d_c - 2*float(self.cfg.robot_rad_m))  # distance depuis les bords des robots
                 if d > range_m:
                     continue
 
                 # Angle entre heading du receveur et direction vers l'émetteur
                 ang_to_sender = float(np.arctan2(v[1], v[0]))
-                rel = self._angle_wrap_pi(ang_to_sender - yaw[rid])
+                rel_r = self._angle_wrap_pi(ang_to_sender - yaw[rid])
 
-                # demi-cercle devant 
-                if abs(rel) > fov_rad_half:
+                # hors du demi-cercle devant le receveur 
+                if abs(rel_r) > fov_rad_half:
+                    continue
+
+                # Angle entre heading de l'émetteur et direction vers le receveur
+                ang_to_reciever = float(np.arctan2(-v[1], -v[0]))
+                rel_s = self._angle_wrap_pi(ang_to_reciever - yaw[sender_id])
+
+                #hors du demi-cercle devant l'émetteur
+                if abs(rel_s) > fov_rad_half:
                     continue
 
                 # Option bruit: drop
                 if self.cfg.drop_prob > 0.0 and np.random.rand() < self.cfg.drop_prob:
                     continue
-
+                
+                # déterminer secteur (0..5)
+                fov_rad = 2.0 * fov_rad_half
+                sector = self._rel_angle_to_sector(rel_r, fov_rad, self.cfg.num_captors)
                 # strenght simple (optionnel): 1 à 0 selon distance
                 strenght = max(0.0, 1.0 - d / range_m)
 
-                rb.ir_comm._push_inbox(IRMessage(sender_id=sender_id, payload=int(payload), time_s=float(t_send), strenght=strenght))
+                rb.ir_comm._push_inbox(IRMessage(sender_id=sender_id,
+                                                payload=int(payload), 
+                                                time_s=float(t_send),
+                                                captor_id=sector,
+                                                strenght=strenght))
