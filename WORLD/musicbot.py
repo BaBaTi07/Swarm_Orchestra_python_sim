@@ -7,13 +7,15 @@ from SENSORS.music_module import MusicModule
 from MIDI.midi_recorder import MidiRecorder
 from SENSORS.ir_comm import IRComm, IRCommConfig
 from TOOLS.angle_to_sector import angle_to_sector
+from TOOLS.note_to_color import note_to_color
 
 
 from WORLD.shapes import Diff_drive_robot
+from OpenGL.GLU import gluNewQuadric, gluCylinder, gluDisk
 from OpenGL.GL import (
     glPushMatrix, glPopMatrix, glTranslatef,
     glDisable, glEnable, glLineWidth, glColor3f,
-    glBegin, glEnd, glVertex3f, GL_LINES, GL_LIGHTING
+    glBegin, glEnd, glVertex3f,glRotatef, GL_LINES, GL_LIGHTING, GL_QUADS
 )
 
 class MusicBot(Diff_drive_robot):
@@ -51,6 +53,11 @@ class MusicBot(Diff_drive_robot):
         # --- MIDI recorder ---
         self.midi_recorder = midi_recorder  
 
+        # led state
+        self.time_s : float = 0.0
+        self.led_until_s : float = 0.0
+        self.led_color : tuple[float, float, float] = (0.0, 0.0, 0.0)
+
 
     #update all sensor of th robot    
     def update_sensors(self) -> None:
@@ -60,9 +67,14 @@ class MusicBot(Diff_drive_robot):
     def update_ultrasonic_sensors(self) -> None:
         self.Dst_rd.update_sensors(self.id)
     
-    def play_note(self, note: str, duration_s: float, volume: float = 1.0, now_s: float|None = None):
+    def play_note(self, note: int, duration_s: float, volume: float = 1.0, now_s: float|None = None):
         # audio
         self.music.play_note(note, duration_s, volume) 
+
+        self.led_color = note_to_color(note)
+        if now_s is not None:
+            self.led_until_s = now_s + duration_s
+
         # midi recording
         if self.midi_recorder is not None and now_s is not None:
             self.midi_recorder.record_note(
@@ -72,7 +84,34 @@ class MusicBot(Diff_drive_robot):
                 duration_s=duration_s,
                 volume_0_1=volume
             )
+    def draw_led(self):
 
+        # éteint si expiré
+        if self.time_s >= self.led_until_s:
+            self.led_color = (0.1, 0.1, 0.1)
+
+        r, g, b = self.led_color
+
+        rear_offset = self.radius * 0.65
+        x = -rear_offset * np.cos(self.rot[2])
+        z = -rear_offset * np.sin(self.rot[2])
+
+        led_radius = 0.018
+        led_height = 0.005
+        y = self.height + 0.002
+
+        glDisable(GL_LIGHTING)
+        glColor3f(r, g, b)
+        glPushMatrix()
+        glTranslatef(x, y, z)
+        glRotatef(-90.0, 1.0, 0.0, 0.0)
+        quad = gluNewQuadric()
+        gluDisk(quad, 0.0, led_radius, 16, 1)
+        gluCylinder(quad, led_radius, led_radius, led_height, 16, 1)
+        glTranslatef(0.0, 0.0, led_height)
+        gluDisk(quad, 0.0, led_radius, 16, 1)
+        glPopMatrix()
+        glEnable(GL_LIGHTING)
 
     def draw(self):
         
@@ -93,6 +132,8 @@ class MusicBot(Diff_drive_robot):
         glEnd()
         glLineWidth(1.0)
         glEnable(GL_LIGHTING)
+
+        self.draw_led()
 
         # draw IR communication rays 
         # TODO: montrer quel secteur est actif (ex: rouge si message reçu dans ce secteur)

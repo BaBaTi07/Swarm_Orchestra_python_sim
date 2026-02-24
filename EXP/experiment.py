@@ -109,6 +109,9 @@ class Exp( ):
 
             # Get IR messages for this robot
             msgs = Exp.get_ir_messages(rb, now_s, dt_s)
+
+            # Update robot's internal time (used for LED timing)
+            rb.time_s = now_s  
             
             rb.update_sensors()
 
