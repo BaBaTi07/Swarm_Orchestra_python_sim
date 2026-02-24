@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Deque, List, Optional, Tuple
 from collections import deque
+from TOOLS.angle_to_sector import angle_to_sector
 import numpy as np
+
 
 
 @dataclass(frozen=True)
@@ -115,28 +117,6 @@ class IRMedium:
     def _angle_wrap_pi(a: float) -> float:
         return (a + np.pi) % (2.0 * np.pi) - np.pi
 
-    @staticmethod
-    def _rel_angle_to_sector(rel_angle_rad: float, fov_rad: float, n_sectors: int) -> int:
-        """
-        rel_angle_rad: angle relatif entre receveur et émetteur
-        fov_rad: champ de vision du receveur en radians
-        n_sectors: nombre de secteurs à discrétiser dans le champ de vision
-        Retourne l'index du secteur (0..n-1)
-        """
-        n = int(max(1, n_sectors))
-        half = 0.5 * float(fov_rad)
-
-        # clamp 
-        a = float(np.clip(rel_angle_rad, -half, half))
-
-        # normaliser sur [0,1]
-        x = (a + half) / (2.0 * half) if half > 0 else 0.5
-
-        # index [0..n-1]
-        idx = int(np.floor(x * n))
-        if idx >= n:
-            idx = n - 1
-        return idx
 
     def step(self, robots: np.ndarray, time_s: float, dt_s: float):
 
@@ -207,7 +187,7 @@ class IRMedium:
                 
                 # déterminer secteur (0..5)
                 fov_rad = 2.0 * fov_rad_half
-                sector = self._rel_angle_to_sector(rel_r, fov_rad, self.cfg.num_captors)
+                sector = angle_to_sector(rel_r, fov_rad, self.cfg.num_captors)
                 # strenght simple (optionnel): 1 à 0 selon distance
                 strenght = max(0.0, 1.0 - d / range_m)
 

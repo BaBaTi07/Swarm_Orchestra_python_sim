@@ -6,6 +6,7 @@ from SENSORS.ir_comm import IRComm
 from SENSORS.music_module import MusicModule
 from MIDI.midi_recorder import MidiRecorder
 from SENSORS.ir_comm import IRComm, IRCommConfig
+from TOOLS.angle_to_sector import angle_to_sector
 
 
 from WORLD.shapes import Diff_drive_robot
@@ -32,7 +33,7 @@ class MusicBot(Diff_drive_robot):
         # --- Ultrasonic sensors ---
         self.Dst_rd = Ultrasonic_sensors()
 
-        # --- IR communication (placeholder) ---
+        # --- IR communication  ---
         self.ir_comm = IRComm(robot_id=int(self.id), config=IRCommConfig( 
             range_m=0.5,
             robot_rad_m=MusicBot.robot_radius,
@@ -94,6 +95,7 @@ class MusicBot(Diff_drive_robot):
         glEnable(GL_LIGHTING)
 
         # draw IR communication rays 
+        # TODO: montrer quel secteur est actif (ex: rouge si message reçu dans ce secteur)
         ir_fov_rad = np.deg2rad(self.ir_comm.cfg.fov_deg)
         n_sectors = self.ir_comm.cfg.num_captors
         sector_angle = ir_fov_rad / float(n_sectors)
