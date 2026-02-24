@@ -90,6 +90,15 @@ class Exp( ):
 
         return folder / f"{base_name}_{timestamp}.mid"
 
+    def get_ir_messages(rb, time_s: float, dt_s: float) -> list:
+        msgs = []
+        # Consume IR messages if the robot has a communication module
+        if hasattr(rb, 'ir_comm') and rb.ir_comm is not None:
+            msgs = rb.ir_comm.consume(time_s=time_s, dt_s=dt_s)
+            if msgs:
+                logger.log("DEBUG", f"Robot {rb.id} received IR messages: {msgs}")
+        return msgs
+
     def make_iteration():
         now_s = Exp.sim_time_s
         dt_s = Exp.dt_s
@@ -97,16 +106,15 @@ class Exp( ):
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
 
         for rb in Arena.robot:
-            msgs = []
-            # Consume IR messages if the robot has a communication module
-            if hasattr(rb, 'ir_comm') and rb.ir_comm is not None:
-                msgs = rb.ir_comm.consume(time_s=now_s, dt_s=dt_s)
-                if msgs:
-                    logger.log("DEBUG", f"Robot {rb.id} received IR messages: {msgs}")
+
+            # Get IR messages for this robot
+            msgs = Exp.get_ir_messages(rb, now_s, dt_s)
             
-            # Update sensors
             rb.update_sensors()
+
+            # get wheels, music event and IR message to send from the controller
             wheels, music_event, msg_snd = Exp.my_controller[rb.id].update( rb.Dst_rd.reading, msgs)
+
             rb.make_movement(np.array(wheels))
             
             # Send IR message if any

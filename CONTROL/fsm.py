@@ -69,6 +69,12 @@ class Fsm( ):
                 return False
         return True
     
+    def check_for_things_around( self, ir_readings: NDArray[np.float64] ):
+        for i in ir_readings:
+            if i < 1.0:
+                return True
+        return False
+    
      #  --------------------------------------------------------
      
     def move_forward(self ):
@@ -76,18 +82,29 @@ class Fsm( ):
         return (0.8, 0.8)
             
     #  --------------------------------------------------------
+    def generate_random_note_event(self):
+        """(midi, duration_s, volume)"""
+        return (int(13*np.random.rand())+60, 0.1+1.0*np.random.rand(), 0.8*np.random.rand())
+    
+    def generate_ir_message(self):
+        """number between 60 and 72 (8 bits)"""
+        return int(np.random.rand()*13 + 60)
        
     def update ( self, ir_readings: NDArray[np.float64], msgs: list ):
+        
+        note_event = None
+        msg_snd = None
+        wheels = (0.0, 0.0)
+
         self.no_obstacle = self.check_for_collisions( ir_readings )
 
-        note_event = None
-        msg_snd = 666
+        if self.check_for_things_around( ir_readings ):
+            msg_snd = self.generate_ir_message()
 
-        if (not self.no_obstacle) and (not self.just_hit_obstacle):
-            # exemple: DO4 = MIDI 60
-            note_event = (int(13*np.random.rand())+60, 0.1+1.0*np.random.rand(), 0.8*np.random.rand())   # (midi, duration_s, volume)
-            
-            self.just_hit_obstacle = True
+        for msg in msgs:
+            note = msg.payload
+            strenght = msg.strenght
+            note_event = (note, 1.0, strenght)
 
         if( self.no_obstacle ):
             self.just_hit_obstacle = False
