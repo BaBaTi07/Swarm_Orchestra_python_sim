@@ -9,6 +9,8 @@ __pycache__/
 # midi files
 *.mid
 
+assets/instruments/voice/
+
 # Distribution / packaging
 .Python
 build/

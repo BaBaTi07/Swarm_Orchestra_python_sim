@@ -88,7 +88,7 @@ class MusicBot(Diff_drive_robot):
 
         # éteint si expiré
         if self.time_s >= self.led_until_s:
-            self.led_color = (0.1, 0.1, 0.1)
+            self.led_color = (0.2, 0.2, 0.2)
 
         r, g, b = self.led_color
 
@@ -150,8 +150,8 @@ class MusicBot(Diff_drive_robot):
             glLineWidth(1.0)
             glColor3f(1.0, 0.0, 0.0)  #red
             glBegin(GL_LINES)
-            glVertex3f(x, self.height + 0.002, z)
-            glVertex3f(x + len * np.cos(angle), self.height + 0.002, z + len * np.sin(angle))
+            glVertex3f(x, self.height - 0.002, z)
+            glVertex3f(x + len * np.cos(angle), self.height - 0.002, z + len * np.sin(angle))
             glEnd()
         glEnable(GL_LIGHTING)
 

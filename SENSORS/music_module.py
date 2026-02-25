@@ -155,8 +155,9 @@ class MusicModule:
         return sound
 
     def play_note(self, midi: int, duration_s: float = 0.25, volume: float = 0.6,
-                   stop_previous: bool = True, prefer_sample: bool = True, fadeout_ms: float = 30.0):
-        
+                   stop_previous: bool = True, prefer_sample: bool = True, fadeout_ms: float = 30.0, one_note_at_a_time = True):
+        if one_note_at_a_time and self.channel.get_busy():
+            return
         if stop_previous:
             self.channel.stop()
         self.channel.set_volume(float(volume))

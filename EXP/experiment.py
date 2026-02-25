@@ -1,5 +1,6 @@
 import numpy as np
 from CONTROL.fsm import *
+from CONTROL.SwarmMusicFsm import *
 from WORLD.arena import *
 from TOOLS.logger import logger
 from MIDI.midi_recorder import MidiRecorder
@@ -37,7 +38,10 @@ class Exp( ):
     def init_all_trials():
         Exp.trial = 0
         for e in range (len(Arena.robot)):
-            Exp.my_controller = np.append(Exp.my_controller, Fsm(0.6, 50))
+            if hasattr(Arena.robot[e], 'play_note'):
+                Exp.my_controller = np.append(Exp.my_controller, SwarmMusicFsm(0.6, 50))
+            else:
+                Exp.my_controller = np.append(Exp.my_controller, Fsm(0.6, 50))
     
     def init_single_trial():
         for e in range (len(Arena.robot)):
@@ -106,17 +110,19 @@ class Exp( ):
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
 
         for rb in Arena.robot:
-
-            # Get IR messages for this robot
-            msgs = Exp.get_ir_messages(rb, now_s, dt_s)
-
+            
             # Update robot's internal time (used for LED timing)
             rb.time_s = now_s  
-            
             rb.update_sensors()
 
             # get wheels, music event and IR message to send from the controller
-            wheels, music_event, msg_snd = Exp.my_controller[rb.id].update( rb.Dst_rd.reading, msgs)
+            if hasattr(rb, 'play_note'):
+                msgs = Exp.get_ir_messages(rb, now_s, dt_s)
+                wheels, music_event, msg_snd = Exp.my_controller[rb.id].update( rb.Dst_rd.reading, msgs, time_s=now_s, dt_s=dt_s)
+            else:
+                wheels = Exp.my_controller[rb.id].update( rb.Dst_rd.reading)
+                music_event = None
+                msg_snd = None
 
             rb.make_movement(np.array(wheels))
             
