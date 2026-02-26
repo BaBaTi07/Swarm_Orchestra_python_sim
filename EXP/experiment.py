@@ -80,12 +80,12 @@ class Exp( ):
         else:
             return True
     
-    def exp_engine():
+    def exp_engine(mute=False):
         Exp.init_all_trials()
         while ( Exp.finalise_all_trials() ):
             Exp.init_single_trial()
             while ( Exp.finalise_single_trial() ):
-                Exp.make_iteration()
+                Exp.make_iteration(mute)
     
     def build_midi_filename( base_name: str, folder: str ) -> Path:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -103,14 +103,18 @@ class Exp( ):
                 logger.log("DEBUG", f"Robot {rb.id} received IR messages: {msgs}")
         return msgs
 
-    def make_iteration():
+    def make_iteration(mute=False):
         now_s = Exp.sim_time_s
         dt_s = Exp.dt_s
+
+        # log when mute to folow the simulation when not viewing
+        if mute and now_s%10 <= dt_s:
+            logger.log("INFO", f"Iteration {Exp.iter}, Simulation time: {now_s:.2f} seconds")
 
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
 
         for rb in Arena.robot:
-            
+
             # Update robot's internal time (used for LED timing)
             rb.time_s = now_s  
             rb.update_sensors()
@@ -133,6 +137,6 @@ class Exp( ):
             # Play music event if any
             if music_event is not None and hasattr(rb, 'play_note'):
                 logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
-                rb.play_note(music_event[0], music_event[1], volume=music_event[2], now_s=now_s)
+                rb.play_note(music_event[0], music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
         Exp.iter += 1
         Exp.sim_time_s += dt_s

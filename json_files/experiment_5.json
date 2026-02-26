@@ -10,7 +10,7 @@
             "duration":
             {
                 "num_trials": 1,
-                "num_iterations": 70000,
+                "num_iterations": 10000,
                 "seed": 33,
                 "delta_t(ms)": 20
             }

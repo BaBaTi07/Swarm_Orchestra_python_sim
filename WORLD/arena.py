@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
+import math
 from WORLD.shapes import *
 
 class Arena():
@@ -217,8 +218,8 @@ class Arena():
 
     def compute_dist_to_cuboid(id: int,cub: Cuboid,ir_range: float,ir_angle: NDArray[np.float64],distance: NDArray[np.float64]):
     
-        P = np.array(Arena.robot[id].pos[0:2], dtype=float)# centre du robot en 2D
-        C = np.array(cub.pos[0:2], dtype=float)             # centre du cuboid en 2D
+        rx, ry = float(Arena.robot[id].pos[0]), float(Arena.robot[id].pos[1]) # centre du robot en 2D
+        cx, cy = float(cub.pos[0]), float(cub.pos[1])             # centre du cuboid en 2D
 
         r_self = float(Arena.robot[id].radius)
 
@@ -228,55 +229,55 @@ class Arena():
         # Rotation yaw du cuboid
         yaw_c = float(cub.rot[2]) if hasattr(cub, "rot") else 0.0
 
+        dx = rx - cx
+        dy = ry - cy
+
         # Bounding circle radius for quick rejection test
-        bounding = np.sqrt(hx*hx + hy*hy) + r_self
-        if np.linalg.norm(P - C) - bounding > ir_range:
+        bounding = math.sqrt(hx*hx + hy*hy) + r_self
+        if math.sqrt(dx*dx + dy*dy) - bounding > ir_range:
             return
 
         # Matrice rotation inverse 
         # on fait tourner le repere autour du centre du cuboid pour que le cuboid soit aligné
-        cos_y = np.cos(-yaw_c)
-        sin_y = np.sin(-yaw_c)
+        cos_y = math.cos(-yaw_c)
+        sin_y = math.sin(-yaw_c)
 
-        def world_to_local(v: np.ndarray) -> np.ndarray:
-            return np.array([
-                cos_y * v[0] - sin_y * v[1],
-                sin_y * v[0] + cos_y * v[1],
-            ], dtype=float)
-
-        # Origine of rayon in cuboid local frame
-        p_local = world_to_local(P - C)
+        px = cos_y*dx - sin_y*dy
+        py = sin_y*dx + cos_y*dy
 
         yaw_r = float(Arena.robot[id].rot[2])
 
         eps = 1e-12
         for ir in range(len(ir_angle)):
             phi = yaw_r + float(ir_angle[ir])
-            u_world = np.array([np.cos(phi), np.sin(phi)], dtype=float)
-            u_local = world_to_local(u_world)
+            ux_world = math.cos(phi)
+            uy_world = math.sin(phi)
+            
+            ux_local = cos_y*ux_world - sin_y* uy_world
+            uy_local = sin_y*ux_world + cos_y* uy_world
 
             # Intersection rayon (p_local + t*u_local) avec AABB [-hx,hx] x [-hy,hy]
-            tmin = -np.inf
-            tmax =  np.inf
+            tmin = -1e30
+            tmax =  1e30
 
             # Axe X
-            if abs(u_local[0]) < eps:
+            if abs(ux_local) < eps:
                 # Rayon parallèle aux faces verticales
-                if p_local[0] < -hx or p_local[0] > hx:
+                if px < -hx or px > hx:
                     continue
             else:
-                tx1 = (-hx - p_local[0]) / u_local[0]
-                tx2 = ( hx - p_local[0]) / u_local[0]
+                tx1 = (-hx - px) / ux_local
+                tx2 = ( hx - px) / ux_local
                 tmin = max(tmin, min(tx1, tx2))
                 tmax = min(tmax, max(tx1, tx2))
 
             # Axe Y
-            if abs(u_local[1]) < eps:
-                if p_local[1] < -hy or p_local[1] > hy:
+            if abs(uy_local) < eps:
+                if py < -hy or py > hy:
                     continue
             else:
-                ty1 = (-hy - p_local[1]) / u_local[1]
-                ty2 = ( hy - p_local[1]) / u_local[1]
+                ty1 = (-hy - py) / uy_local
+                ty2 = ( hy - py) / uy_local
                 tmin = max(tmin, min(ty1, ty2))
                 tmax = min(tmax, max(ty1, ty2))
 

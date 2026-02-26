@@ -74,6 +74,6 @@ if __name__ == "__main__" :
         window.show()
         app.exec() # start the event loop
     else:
-        Exp.exp_engine()
+        Exp.exp_engine(mute=True)
         sys.exit()
     

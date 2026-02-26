@@ -67,13 +67,14 @@ class MusicBot(Diff_drive_robot):
     def update_ultrasonic_sensors(self) -> None:
         self.Dst_rd.update_sensors(self.id)
     
-    def play_note(self, note: int, duration_s: float, volume: float = 1.0, now_s: float|None = None):
+    def play_note(self, note: int, duration_s: float, volume: float = 1.0, now_s: float|None = None, mute: bool = False):
         # audio
-        self.music.play_note(note, duration_s, volume) 
+        if not mute:
+            self.music.play_note(note, duration_s, volume) 
 
-        self.led_color = note_to_color(note)
-        if now_s is not None:
-            self.led_until_s = now_s + duration_s
+            self.led_color = note_to_color(note)
+            if now_s is not None:
+                self.led_until_s = now_s + duration_s
 
         # midi recording
         if self.midi_recorder is not None and now_s is not None:
