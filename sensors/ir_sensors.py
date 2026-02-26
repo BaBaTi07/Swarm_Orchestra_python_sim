@@ -10,6 +10,8 @@ class Ir_sensors():
     twopi                   = (2.0 * np.pi)
     halfpi                  = 0.5 * np.pi
     ir_angle                = np.array([0.3, 0.8, halfpi, 2.64, -2.64, -halfpi, -0.8, -0.3])
+    ir_cos                  = np.cos(ir_angle)
+    ir_sin                  = np.sin(ir_angle)
     
     def __init__ ( self ):
         self.reading  = np.zeros(Ir_sensors.nb_sensors)
@@ -20,7 +22,7 @@ class Ir_sensors():
     def update_sensors( self, id:np.int64 ):
         for i in range( Ir_sensors.nb_sensors ):
             self.distance[i] = Ir_sensors.ir_range
-        Arena.compute_min_dist_to_objects( id, Ir_sensors.ir_range, Ir_sensors.ir_angle, self.distance )
+        Arena.compute_min_dist_to_objects( id, Ir_sensors.ir_range,Ir_sensors.ir_angle, Ir_sensors.ir_cos, Ir_sensors.ir_sin, self.distance )
         self.compute_reading ( self.distance )
         self.add_noise( )
     

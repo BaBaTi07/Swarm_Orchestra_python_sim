@@ -12,6 +12,8 @@ class Ultrasonic_sensors():
     halfpi                  = 0.5 * np.pi
 
     us_angle                = np.array([0.3, 0.8, halfpi, 2.64, -2.64, -halfpi, -0.8, -0.3])
+    us_cos                  = np.cos(us_angle)
+    us_sin                  = np.sin(us_angle)
     
     def __init__ ( self ):
         self.reading  = np.zeros(Ultrasonic_sensors.nb_sensors)
@@ -22,7 +24,12 @@ class Ultrasonic_sensors():
     def update_sensors( self, id:np.int64 ):
         for i in range( Ultrasonic_sensors.nb_sensors ):
             self.distance[i] = Ultrasonic_sensors.us_range
-        Arena.compute_min_dist_to_objects( id, Ultrasonic_sensors.us_range, Ultrasonic_sensors.us_angle, self.distance )
+        Arena.compute_min_dist_to_objects( id,
+                                           Ultrasonic_sensors.us_range,
+                                           Ultrasonic_sensors.us_angle,
+                                           Ultrasonic_sensors.us_cos,
+                                           Ultrasonic_sensors.us_sin,
+                                           self.distance )
         self.compute_reading ( self.distance )
         self.add_noise( )
     
