@@ -6,7 +6,7 @@ class Ultrasonic_sensors():
     nb_sensors              = 8
     us_range                = 1.0
     max_us_reading          = 4095.0
-    noise_level             = 1.0
+    noise_level             = 0
 
     twopi                   = (2.0 * np.pi)
     halfpi                  = 0.5 * np.pi
@@ -36,16 +36,16 @@ class Ultrasonic_sensors():
     def compute_reading( self, dist: NDArray[np.float64]):
         for us in range( Ultrasonic_sensors.nb_sensors ):
             self.reading[us] = -1
-            if (dist[us] > 0.03 and dist[us] <= 0.04):
-                self.reading[us] = -20600 * dist[us] + 924
-            elif ( dist[us] > 0.02 and dist[us] <= 0.03):
-                self.reading[us] = -37000 * dist[us] + 1416
-            elif ( dist[us] > 0.01 and dist[us] <= 0.02):
-                self.reading[us] = -153500 * dist[us] + 3746
-            elif ( dist[us] > 0.005 and dist[us] <= 0.01):
-                self.reading[us] = -252600 * dist[us] + 4737
-            elif ( dist[us] >= 0.0 and dist[us] <= 0.005 ):
-                self.reading[us] = -124200 * dist[us] + 4095
+            if (dist[us] > Ultrasonic_sensors.us_range*0.75 and dist[us] <= Ultrasonic_sensors.us_range*0.99):
+                self.reading[us] = -3600 * dist[us] + 3600
+            elif ( dist[us] > Ultrasonic_sensors.us_range*0.5 and dist[us] <= Ultrasonic_sensors.us_range*0.75):
+                self.reading[us] = -4400 * dist[us] + 4200
+            elif ( dist[us] > Ultrasonic_sensors.us_range*0.3 and dist[us] <= Ultrasonic_sensors.us_range*0.5):
+                self.reading[us] = -5000 * dist[us] + 4500
+            elif ( dist[us] > Ultrasonic_sensors.us_range*0.1 and dist[us] <= Ultrasonic_sensors.us_range*0.3):
+                self.reading[us] = -4000 * dist[us] + 4200
+            elif ( dist[us] >= 0.0 and dist[us] <= Ultrasonic_sensors.us_range*0.1 ):
+                self.reading[us] = -2950 * dist[us] + 4095
     
     def add_noise( self ):
         for us in range( Ultrasonic_sensors.nb_sensors ):

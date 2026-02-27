@@ -69,12 +69,6 @@ class Fsm( ):
                 return False
         return True
     
-    def check_for_things_around( self, ir_readings: NDArray[np.float64] ):
-        for i in ir_readings:
-            if i < 1.0:
-                return True
-        return False
-    
      #  --------------------------------------------------------
      
     def move_forward(self ):

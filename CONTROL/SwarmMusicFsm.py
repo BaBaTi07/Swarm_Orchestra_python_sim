@@ -19,8 +19,22 @@ class SwarmMusicFsm(Fsm):
 
         self.K = 0.1 # Kuramoto coupling strength
         self.theta = float(2.0 * np.pi * np.random.rand())  # initial phase of the internal clock
-
-
+    
+    def check_for_collisions( self, ir_readings: NDArray[np.float64] ):
+        index = [3,4]
+        ir = np.delete(ir_readings, index)
+        for i in ir:
+            if i > 0.98:
+                return False
+        return True
+    
+    def check_for_things_around( self, ir_readings: NDArray[np.float64] ):
+        for i in ir_readings:
+            if i > 0.5: #closer -> 1, farther -> 0, middle -> 0.5
+                #print("something around", ir_readings)
+                return True
+        return False
+    
     def generate_random_note_event(self):
         """(midi, duration_s, volume)"""
         return (int(13*np.random.rand())+60, 0.5, 0.6)
