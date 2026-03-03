@@ -74,6 +74,10 @@ class Fsm( ):
     def move_forward(self ):
         self.count_step_forward += 1
         return (0.8, 0.8)
+    
+    def stop_wheels (self):
+        self.count_step_forward = 0
+        return (0.5, 0.5)
             
     #  --------------------------------------------------------
 

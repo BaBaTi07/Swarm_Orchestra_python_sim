@@ -17,9 +17,48 @@ class SwarmMusicFsm(Fsm):
         self.beat_to_play = 1 #int(np.random.randint(0, self.nbr_beats))
         self.beat_duration_s = self.cicle_time_s / self.nbr_beats
 
-        self.K = 0.1 # Kuramoto coupling strength
+        self.K = 0.5 # Kuramoto coupling strength
         self.theta = float(2.0 * np.pi * np.random.rand())  # initial phase of the internal clock
+        self.kuramoto_conf = 0.5 #confidence in sync [0-1] increase when same theta, decrease when opposite theta
+
+        self.communication_time = 3.0 # time for witch the robot will stop and comunicate when recieving a message
+        self.communicating = False
+        self.communication_timer = 0.0
+
+        self.communication_cooldown_time = 5.0 # the robot will not communicate so it can move around 
+        self.communication_cooldown_timer = 0.0
+        self.communication_cooldown = False
+
+    def update_communication(self, dt_s, msgs):
+        """
+        Handle if a robot should stop moving and communicate
+        or not based on received messages and cooldowns.
+        """
+        wheels = (0.8, 0.8)
+
+        if msgs and not self.communicating and not self.communication_cooldown:
+            self.communicating = True
+            self.communication_timer = 0.0
+
+        # hndle current communication state
+        if self.communicating:
+            self.communication_timer += dt_s
+            wheels = self.stop_wheels()
+            if self.communication_timer >= self.communication_time:
+                # communication done, reset timers and states
+                self.communicating = False
+                self.communication_cooldown = True
+                self.communication_cooldown_timer = 0.0
+
+        # Handle cooldown timer        
+        if self.communication_cooldown:
+            self.communication_cooldown_timer += dt_s
+            if self.communication_cooldown_timer >= self.communication_cooldown_time:
+                self.communication_cooldown = False
+                self.communication_cooldown_timer = 0.0
+        return wheels
     
+
     def check_for_collisions( self, ir_readings: NDArray[np.float64] ):
         index = [3,4]
         ir = np.delete(ir_readings, index)
@@ -60,7 +99,9 @@ class SwarmMusicFsm(Fsm):
         # Add coupling from received messages
         for msg in msgs:
             theta_j = self.payload_to_theta(msg.payload)
-            theta_dot += self.K * np.sin(theta_j - theta)
+            self.update_kuramoto_confidence(theta_j, theta)
+            theta_dot += ( self.K * (1-self.kuramoto_conf)) * np.sin(theta_j - theta)
+            #print(f"theta_j={theta_j:.2f}, current theta={theta:.2f}, confidence={self.kuramoto_conf:.2f}, theta_dot={theta_dot:.2f}")
         
         # Update the internal clock phase
         theta = (theta + theta_dot * dt_s) % (2.0 * np.pi)
@@ -68,6 +109,19 @@ class SwarmMusicFsm(Fsm):
         # return internal clock time and phase
         return (theta / (2.0 * np.pi)) * T , theta
     
+    def update_kuramoto_confidence(self, theta_j, theta):
+        """Update the confidence in synchronization based on communication success."""
+        diff = abs((theta_j - theta+np.pi) % (2.0 * np.pi) - np.pi) 
+
+        if diff < 0.1:  
+            self.kuramoto_conf = min(1.0, self.kuramoto_conf + 0.005)  
+        elif diff < 0.5: 
+            self.kuramoto_conf = min(1.0, self.kuramoto_conf + 0.002)
+        elif diff > 3.0: 
+            self.kuramoto_conf = max(0.0, self.kuramoto_conf - 0.005)
+        # if diff is moderate, we do not change confidence
+        self.kuramoto_conf = max(0.0, min(1.0, self.kuramoto_conf))  #[0, 1]
+
     def update(self, ir_readings: NDArray[np.float64], msgs: list, time_s: float, dt_s: float):
 
         note_event = None
@@ -91,6 +145,11 @@ class SwarmMusicFsm(Fsm):
             msg_snd = self.generate_ir_message()
 
         self.no_obstacle = self.check_for_collisions( ir_readings )
+
+        # if receiving a message, stop and communicate
+        wheels = self.update_communication(dt_s, msgs)
+        if wheels != (0.8, 0.8):
+             return wheels, note_event, msg_snd
 
         if( self.no_obstacle ):
             self.just_hit_obstacle = False
