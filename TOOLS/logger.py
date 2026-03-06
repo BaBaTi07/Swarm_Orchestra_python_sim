@@ -9,7 +9,7 @@ class logger:
             print(f"[{level}] {msg}")
         elif level == "TIME":
             elapsed = time.perf_counter() - logger.start_time
-            print(f"[{elapsed:.2f}][{level}] {msg}")
+            print(f"[{elapsed:.2f} s] {msg}")
         
         elif logger.levels[level] >= logger.levels[logger.curent_level]:
             print(f"[{level}] {msg}")

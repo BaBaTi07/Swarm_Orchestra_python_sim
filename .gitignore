@@ -10,6 +10,7 @@ __pycache__/
 *.mid
 
 assets/instruments/voice/
+metrics/
 
 # Distribution / packaging
 .Python

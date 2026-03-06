@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from CONTROL.fsm import *
 from CONTROL.SwarmMusicFsm import *
 from WORLD.arena import *
@@ -20,6 +21,7 @@ class Exp( ):
     has_music = [False]* len(Arena.robot)
     has_ir_comm = [False]* len(Arena.robot)
     midi          = MidiRecorder(tempo_bpm=120.0)  # Global MIDI recorder for the experiment
+    phase_sync_history = []   # list of (time_s, sync)
     ir_medium      = IRMedium(config=IRCommConfig( 
         range_m=0.5,
         fov_deg=180.0,
@@ -61,7 +63,7 @@ class Exp( ):
             np.copyto(Arena.robot[id].rot, Arena.robot[id].init_rot )
         Exp.iter = 0
         Exp.sim_time_s = 0.0
-
+        Exp.phase_sync_history = []
         # Start the Midi recording if the robots are music bots
         if any(isinstance(rb, MusicBot) for rb in Arena.robot):
             
@@ -78,9 +80,10 @@ class Exp( ):
         if( Exp.iter >= Exp.num_iterations):
             Exp.trial += 1
             if Exp.midi.is_enabled():
-                Exp.midi.write_midi(Exp.build_midi_filename(f"trial_{Exp.trial}", "MIDI/midi_records") )
+                Exp.midi.write_midi(Exp.build_filename(f"trial_{Exp.trial}", "MIDI/midi_records") )
                 logger.log("INFO", f"Trial {Exp.trial} ended. MIDI file saved as 'trial_{Exp.trial}.mid'.")
                 Exp.midi.stop() 
+                Exp.save_sync_plot_and_csv(f"trial_{Exp.trial}", "metrics")
             return False
         else:
             return True
@@ -98,12 +101,12 @@ class Exp( ):
             while ( Exp.finalise_single_trial() ):
                 Exp.make_iteration(mute)
     
-    def build_midi_filename( base_name: str, folder: str ) -> Path:
+    def build_filename( base_name: str, folder: str, file_extension: str = "mid" ) -> Path:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=True)
 
-        return folder / f"{base_name}_{timestamp}.mid"
+        return folder / f"{base_name}_{timestamp}.{file_extension}"
 
     def get_ir_messages(rb, time_s: float, dt_s: float) -> list:
         msgs = []
@@ -113,7 +116,50 @@ class Exp( ):
             if msgs:
                 logger.log("DEBUG", f"Robot {rb.id} received IR messages: {msgs}")
         return msgs
+    
+    def compute_phase_sync():
+        thetas = []
 
+        for rb in Arena.robot:
+            if hasattr(Exp.my_controller[rb.id], "theta"):
+                thetas.append(Exp.my_controller[rb.id].theta)
+
+        if not thetas:
+            return None
+
+        thetas = np.array(thetas)
+
+        r = np.abs(np.mean(np.exp(1j * thetas))) #1j = sqrt(-1)
+
+        return r
+    
+    def save_sync_plot_and_csv(base_name: str, folder: str = "metrics"):
+        folder = Path(folder)
+        folder.mkdir(parents=True, exist_ok=True)
+
+        if not Exp.phase_sync_history:
+            return
+
+        data = np.array(Exp.phase_sync_history, dtype=float)
+        t = data[:, 0]
+        R = data[:, 1]
+
+        # CSV
+        csv_path = Exp.build_filename(f"{base_name}_kuramoto_R", folder, file_extension="csv")
+        np.savetxt(csv_path, data, delimiter=",", header="time_s,R", comments="")
+
+        # Plot
+        plt.figure()
+        plt.plot(t, R)
+        plt.xlabel("Simulation time (s)")
+        plt.ylabel("Kuramoto order parameter R")
+        plt.title("Synchronization over time")
+        png_path = Exp.build_filename(f"{base_name}_kuramoto_R", folder, file_extension="png")
+        plt.savefig(png_path, dpi=150, bbox_inches="tight")
+        plt.close()
+
+        logger.log("INFO", f"Saved sync metrics: {csv_path} and {png_path}")
+    
     def make_iteration(mute=False):
         now_s = Exp.sim_time_s
         dt_s = Exp.dt_s
@@ -121,6 +167,13 @@ class Exp( ):
         # log when mute to folow the simulation when not viewing
         if mute and now_s%10 <= dt_s:
             logger.log("TIME", f"Iteration {Exp.iter}, Simulation time: {now_s:.2f} seconds")
+        
+        # Compute and log synchronization metric
+        if now_s%2 <= dt_s:  
+            sync = Exp.compute_phase_sync()
+            if sync is not None:
+                Exp.phase_sync_history.append((now_s, sync))
+                logger.log("TIME", f"sync={sync:.3f}")
 
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
 
