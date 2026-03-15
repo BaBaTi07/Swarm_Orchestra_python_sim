@@ -1,7 +1,9 @@
 import numpy as np
+import copy
 from numpy.typing import NDArray
 from CONTROL.fsm  import Fsm
 from TOOLS.logger import logger
+from TOOLS.scales import Scales
 
 
 class SwarmMusicFsm(Fsm):
@@ -17,7 +19,7 @@ class SwarmMusicFsm(Fsm):
         self.beat_to_play = 1 #int(np.random.randint(0, self.nbr_beats))
         self.beat_duration_s = self.cicle_time_s / self.nbr_beats
 
-        self.K = 0.5 # Kuramoto coupling strength
+        self.K = 1.5 # Kuramoto coupling strength
         self.theta = float(2.0 * np.pi * np.random.rand())  # initial phase of the internal clock
         self.kuramoto_conf = 0.5 #confidence in sync [0-1] increase when same theta, decrease when opposite theta
 
@@ -28,6 +30,13 @@ class SwarmMusicFsm(Fsm):
         self.communication_cooldown_time = 5.0 # the robot will not communicate so it can move around 
         self.communication_cooldown_timer = 0.0
         self.communication_cooldown = False
+
+        self.last_received_notes_max_length =3
+        self.last_received_notes = []
+        self.last_played_note = None
+
+        self.note_or_clock = False # if true, send note, if false send clock
+        
 
     def update_communication(self, dt_s, msgs):
         """
@@ -76,12 +85,59 @@ class SwarmMusicFsm(Fsm):
     
     def generate_random_note_event(self):
         """(midi, duration_s, volume)"""
-        return (int(13*np.random.rand())+60, 0.5, 0.6)
+        return (int(12*np.random.rand())+60, self.beat_duration_s, self.kuramoto_conf)
     
-    def generate_ir_message(self):
-        """return internal clock (8 bits)"""
-        return int(self.internal_clock / self.cicle_time_s * 128) % 128
+    def generate_note_to_play(self, msgs):
+        """chose the note to play based on the three last diferent recived notes"""
+        if not msgs or self.last_played_note is None:
+            if self.last_played_note is None:
+                self.last_played_note = self.generate_random_note_event() 
+            return self.last_played_note
+        
+        # extract notes from messages and keep only the last three different ones
+        for msg in msgs:
+            note = msg.payload - 128  # convert back to note value
+            if note not in self.last_received_notes: #new note
+                self.last_received_notes.append(note)
+
+                if len(self.last_received_notes) > self.last_received_notes_max_length:
+                    self.last_received_notes.pop(0)
+
+                chosen_note = 60 + self.choose_note_from_scale(self.last_received_notes, self.last_played_note)
+
+                self.last_played_note = (chosen_note, self.beat_duration_s, 0.6)
+        
+        return self.last_played_note
     
+    def choose_note_from_scale(self, notes, last_note):
+        """choose a note from the scales based on the last received notes"""
+        note_mod = [note % 12 for note in notes]
+
+        potential_scales = [
+            scale for scale in Scales
+            if all(note in scale.notes for note in note_mod)
+        ]
+
+        logger.log("INFO",f"Potential scales based on received notes {notes}: {[scale.name for scale in potential_scales]}")
+
+        last_note_mod = last_note[0] % 12
+        if not potential_scales:
+            return last_note_mod
+        if any(last_note_mod in scale.notes for scale in potential_scales):
+            return last_note_mod
+
+        chosen_scale = np.random.choice(potential_scales)
+        return np.random.choice(chosen_scale.notes)
+                        
+    def generate_ir_message(self, note=None):
+        """return internal clock (7 bits)msb = 0 or note (7 bits) msb = 1"""
+        if note is not None:
+            # Send a note message
+            return 128 + int(note) % 128
+        else:
+            # Send internal clock message
+            return int(self.internal_clock / self.cicle_time_s * 128) % 128
+
     def theta_to_payload(self):
         """Convert the internal clock phase (theta) to an 8-bit payload for IR communication."""
         return int((self.theta % (2.0 * np.pi)) / (2.0 * np.pi) * 128) % 128
@@ -114,11 +170,13 @@ class SwarmMusicFsm(Fsm):
         diff = abs((theta_j - theta+np.pi) % (2.0 * np.pi) - np.pi) 
 
         if diff < 0.1:  
-            self.kuramoto_conf = min(1.0, self.kuramoto_conf + 0.005)  
+            self.kuramoto_conf = min(1.0, self.kuramoto_conf + 0.015)  
         elif diff < 0.5: 
-            self.kuramoto_conf = min(1.0, self.kuramoto_conf + 0.002)
-        elif diff > 3.0: 
-            self.kuramoto_conf = max(0.0, self.kuramoto_conf - 0.005)
+            self.kuramoto_conf = min(1.0, self.kuramoto_conf + 0.0045)
+        elif diff < 1.0: 
+            self.kuramoto_conf = max(0.0, self.kuramoto_conf + 0.0015)
+        else:
+            self.kuramoto_conf = max(0.0, self.kuramoto_conf - 0.001)
         # if diff is moderate, we do not change confidence
         self.kuramoto_conf = max(0.0, min(1.0, self.kuramoto_conf))  #[0, 1]
 
@@ -127,6 +185,8 @@ class SwarmMusicFsm(Fsm):
         note_event = None
         msg_snd = None
         wheels = (0.5, 0.5)
+        synch_msg = []
+        note_msg = []
 
         # Wait 0-5 seconds before moving to simulate manual initialization and desynchronization
         if self.start:
@@ -134,15 +194,29 @@ class SwarmMusicFsm(Fsm):
             self.waiting_time = float(5 * np.random.rand())
         if time_s < self.waiting_time:
             return wheels, note_event, msg_snd
+        
+        #sort synch and note messages
+        for msg in msgs:
+            if msg.payload >= 128:  # note message
+                note_msg.append(msg)
+            else:  # synchronization message
+                synch_msg.append(msg)
 
         # Kuramoto --> internal clock time and phase"""
-        self.internal_clock, self.theta = self.Kuramoto_update(msgs, self.cicle_time_s, dt_s, self.theta)
+        self.internal_clock, self.theta = self.Kuramoto_update(synch_msg, self.cicle_time_s, dt_s, self.theta)
 
+        note_to_play = self.generate_note_to_play(note_msg)
+            
         if self.internal_clock < (dt_s + self.beat_duration_s * self.beat_to_play) and self.internal_clock + dt_s >= (self.beat_duration_s * self.beat_to_play): 
-            note_event = self.generate_random_note_event()
+            note_event = note_to_play
             
         if self.check_for_things_around( ir_readings ):
-            msg_snd = self.generate_ir_message()
+            if self.note_or_clock:
+                msg_snd = self.generate_ir_message(note=note_to_play[0])  # send note message
+                self.note_or_clock = False
+            else:
+                msg_snd = self.generate_ir_message()
+                self.note_or_clock = True
 
         self.no_obstacle = self.check_for_collisions( ir_readings )
 

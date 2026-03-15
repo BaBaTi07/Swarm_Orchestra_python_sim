@@ -143,17 +143,24 @@ class Exp( ):
         data = np.array(Exp.phase_sync_history, dtype=float)
         t = data[:, 0]
         R = data[:, 1]
+        min_conf = data[:, 2]
+        mean_conf = data[:, 3] 
+        max_conf = data[:, 4]
 
         # CSV
         csv_path = Exp.build_filename(f"{base_name}_kuramoto_R", folder, file_extension="csv")
-        np.savetxt(csv_path, data, delimiter=",", header="time_s,R", comments="")
+        np.savetxt(csv_path, data, delimiter=",", header="time_s,R,kuramoto_conf_min,kuramoto_conf_mean,kuramoto_conf_max", comments="")
 
         # Plot
         plt.figure()
-        plt.plot(t, R)
+        plt.plot(t, R, label="Phase Sync R")
+        plt.plot(t, min_conf, label="Kuramoto Confidence Min", linestyle='--')
+        plt.plot(t, mean_conf, label="Kuramoto Confidence Mean", linestyle='--')
+        plt.plot(t, max_conf, label="Kuramoto Confidence Max", linestyle='--')
         plt.xlabel("Simulation time (s)")
         plt.ylabel("Kuramoto order parameter R")
         plt.title("Synchronization over time")
+        plt.legend()
         png_path = Exp.build_filename(f"{base_name}_kuramoto_R", folder, file_extension="png")
         plt.savefig(png_path, dpi=150, bbox_inches="tight")
         plt.close()
@@ -171,9 +178,12 @@ class Exp( ):
         # Compute and log synchronization metric
         if now_s%2 <= dt_s:  
             sync = Exp.compute_phase_sync()
+            kuramoto_conf_min = np.min([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
+            kuramoto_conf_max = np.max([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
+            kuramoto_conf_mean = np.mean([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
             if sync is not None:
-                Exp.phase_sync_history.append((now_s, sync))
-                logger.log("TIME", f"sync={sync:.3f}")
+                Exp.phase_sync_history.append((now_s, sync, kuramoto_conf_min, kuramoto_conf_mean, kuramoto_conf_max))
+                logger.log("TIME", f"sync={sync:.3f}, Kuramoto confidence (min/mean/max)={kuramoto_conf_min:.3f}/{kuramoto_conf_mean:.3f}/{kuramoto_conf_max:.3f}")
 
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
 
