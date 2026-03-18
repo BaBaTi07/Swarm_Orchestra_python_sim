@@ -16,7 +16,7 @@ class SwarmMusicFsm(Fsm):
         self.internal_clock = 0
         self.cicle_time_s = 2.0  # time of a full cycle of the internal clock
         self.nbr_beats = 4  # number of beats in a cycle
-        self.beat_to_play = 1 #int(np.random.randint(0, self.nbr_beats))
+        self.beat_to_play = int(np.random.randint(0, self.nbr_beats))
         self.beat_duration_s = self.cicle_time_s / self.nbr_beats
 
         self.K = 1.5 # Kuramoto coupling strength
@@ -34,6 +34,8 @@ class SwarmMusicFsm(Fsm):
         self.last_received_notes_max_length =3
         self.last_received_notes = []
         self.last_played_note = None
+
+        self.neighbor_beats_played = []
 
         self.note_or_clock = False # if true, send note, if false send clock
         
@@ -79,13 +81,29 @@ class SwarmMusicFsm(Fsm):
     def check_for_things_around( self, ir_readings: NDArray[np.float64] ):
         for i in ir_readings:
             if i > 0.5: #closer -> 1, farther -> 0, middle -> 0.5
-                #print("something around", ir_readings)
                 return True
         return False
     
     def generate_random_note_event(self):
         """(midi, duration_s, volume)"""
-        return (int(12*np.random.rand())+60, self.beat_duration_s, self.kuramoto_conf)
+        return (int(12*np.random.rand()), self.beat_duration_s, self.kuramoto_conf)
+    
+    def choose_beat_to_play(self, neighbor_beats):
+        """chose the beat to play based on the beat recived from neighbors,
+           if neighbor play the same beat, probabilisticly (0.7) change to a non played beat,
+           otherwise keep the same beat"""
+        
+        if self.beat_to_play in neighbor_beats:
+            if np.random.rand() < 0.7:
+                potential_beats = [beat for beat in range(self.nbr_beats) if beat not in neighbor_beats]
+                if potential_beats:
+                    new_beat = np.random.choice(potential_beats)
+                    logger.log("DEBUG", f"Changing beat from {self.beat_to_play} to {new_beat} to avoid neighbor beats {neighbor_beats}")
+                    return new_beat
+                
+        return self.beat_to_play
+        
+
     
     def generate_note_to_play(self, msgs):
         """chose the note to play based on the three last diferent recived notes"""
@@ -103,7 +121,7 @@ class SwarmMusicFsm(Fsm):
                 if len(self.last_received_notes) > self.last_received_notes_max_length:
                     self.last_received_notes.pop(0)
 
-                chosen_note = 60 + self.choose_note_from_scale(self.last_received_notes, self.last_played_note)
+                chosen_note = self.choose_note_from_scale(self.last_received_notes, self.last_played_note)
 
                 self.last_played_note = (chosen_note, self.beat_duration_s, 0.6)
         
@@ -129,11 +147,11 @@ class SwarmMusicFsm(Fsm):
         chosen_scale = np.random.choice(potential_scales)
         return np.random.choice(chosen_scale.notes)
                         
-    def generate_ir_message(self, note=None):
+    def generate_ir_message(self, note=None, beat=None):
         """return internal clock (7 bits)msb = 0 or note (7 bits) msb = 1"""
         if note is not None:
-            # Send a note message
-            return 128 + int(note) % 128
+            value = (beat * 12) + note 
+            return value  + 128
         else:
             # Send internal clock message
             return int(self.internal_clock / self.cicle_time_s * 128) % 128
@@ -187,6 +205,7 @@ class SwarmMusicFsm(Fsm):
         wheels = (0.5, 0.5)
         synch_msg = []
         note_msg = []
+        neighbor_beats_played = []
 
         # Wait 0-5 seconds before moving to simulate manual initialization and desynchronization
         if self.start:
@@ -199,6 +218,9 @@ class SwarmMusicFsm(Fsm):
         for msg in msgs:
             if msg.payload >= 128:  # note message
                 note_msg.append(msg)
+                beat = (msg.payload - 128)//12
+                neighbor_beats_played.append(beat)
+
             else:  # synchronization message
                 synch_msg.append(msg)
 
@@ -206,13 +228,14 @@ class SwarmMusicFsm(Fsm):
         self.internal_clock, self.theta = self.Kuramoto_update(synch_msg, self.cicle_time_s, dt_s, self.theta)
 
         note_to_play = self.generate_note_to_play(note_msg)
+        self.beat_to_play = self.choose_beat_to_play(neighbor_beats_played)
             
         if self.internal_clock < (dt_s + self.beat_duration_s * self.beat_to_play) and self.internal_clock + dt_s >= (self.beat_duration_s * self.beat_to_play): 
             note_event = note_to_play
             
         if self.check_for_things_around( ir_readings ):
             if self.note_or_clock:
-                msg_snd = self.generate_ir_message(note=note_to_play[0])  # send note message
+                msg_snd = self.generate_ir_message(note=note_to_play[0], beat=self.beat_to_play)  # send note message
                 self.note_or_clock = False
             else:
                 msg_snd = self.generate_ir_message()

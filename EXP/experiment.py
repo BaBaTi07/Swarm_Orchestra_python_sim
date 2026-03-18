@@ -1,14 +1,12 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from CONTROL.fsm import *
 from CONTROL.SwarmMusicFsm import *
 from WORLD.arena import *
 from TOOLS.logger import logger
 from MIDI.midi_recorder import MidiRecorder
 from WORLD.musicbot import MusicBot
-from datetime import datetime
-from pathlib import Path
 from SENSORS.ir_comm import IRMedium, IRCommConfig
+from TOOLS.plot_gen import *
 
 class Exp( ):
     num_trials     = 0
@@ -22,6 +20,8 @@ class Exp( ):
     has_ir_comm = [False]* len(Arena.robot)
     midi          = MidiRecorder(tempo_bpm=120.0)  # Global MIDI recorder for the experiment
     phase_sync_history = []   # list of (time_s, sync)
+    notes_history = []        # list of (time_s, note)
+    beat_played_history = []   # list of (time_s, beat)
     ir_medium      = IRMedium(config=IRCommConfig( 
         range_m=0.5,
         fov_deg=180.0,
@@ -64,6 +64,8 @@ class Exp( ):
         Exp.iter = 0
         Exp.sim_time_s = 0.0
         Exp.phase_sync_history = []
+        Exp.notes_history = []
+        Exp.beat_played_history = []
         # Start the Midi recording if the robots are music bots
         if any(isinstance(rb, MusicBot) for rb in Arena.robot):
             
@@ -80,10 +82,12 @@ class Exp( ):
         if( Exp.iter >= Exp.num_iterations):
             Exp.trial += 1
             if Exp.midi.is_enabled():
-                Exp.midi.write_midi(Exp.build_filename(f"trial_{Exp.trial}", "MIDI/midi_records") )
+                Exp.midi.write_midi(build_filename(f"trial_{Exp.trial}", "MIDI/midi_records") )
                 logger.log("INFO", f"Trial {Exp.trial} ended. MIDI file saved as 'trial_{Exp.trial}.mid'.")
                 Exp.midi.stop() 
-                Exp.save_sync_plot_and_csv(f"trial_{Exp.trial}", "metrics")
+                save_sync_plot_and_csv(Exp.phase_sync_history, f"trial_{Exp.trial}", "metrics/phase_sync")
+                save_harmonic_scale_plot(Exp.notes_history, f"trial_{Exp.trial}", "metrics/harmonic_scales")
+                save_beat_played_plot(Exp.beat_played_history, f"trial_{Exp.trial}", "metrics/beat_played")
             return False
         else:
             return True
@@ -100,13 +104,6 @@ class Exp( ):
             Exp.init_single_trial()
             while ( Exp.finalise_single_trial() ):
                 Exp.make_iteration(mute)
-    
-    def build_filename( base_name: str, folder: str, file_extension: str = "mid" ) -> Path:
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        folder = Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-
-        return folder / f"{base_name}_{timestamp}.{file_extension}"
 
     def get_ir_messages(rb, time_s: float, dt_s: float) -> list:
         msgs = []
@@ -132,40 +129,6 @@ class Exp( ):
         r = np.abs(np.mean(np.exp(1j * thetas))) #1j = sqrt(-1)
 
         return r
-    
-    def save_sync_plot_and_csv(base_name: str, folder: str = "metrics"):
-        folder = Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-
-        if not Exp.phase_sync_history:
-            return
-
-        data = np.array(Exp.phase_sync_history, dtype=float)
-        t = data[:, 0]
-        R = data[:, 1]
-        min_conf = data[:, 2]
-        mean_conf = data[:, 3] 
-        max_conf = data[:, 4]
-
-        # CSV
-        csv_path = Exp.build_filename(f"{base_name}_kuramoto_R", folder, file_extension="csv")
-        np.savetxt(csv_path, data, delimiter=",", header="time_s,R,kuramoto_conf_min,kuramoto_conf_mean,kuramoto_conf_max", comments="")
-
-        # Plot
-        plt.figure()
-        plt.plot(t, R, label="Phase Sync R")
-        plt.plot(t, min_conf, label="Kuramoto Confidence Min", linestyle='--')
-        plt.plot(t, mean_conf, label="Kuramoto Confidence Mean", linestyle='--')
-        plt.plot(t, max_conf, label="Kuramoto Confidence Max", linestyle='--')
-        plt.xlabel("Simulation time (s)")
-        plt.ylabel("Kuramoto order parameter R")
-        plt.title("Synchronization over time")
-        plt.legend()
-        png_path = Exp.build_filename(f"{base_name}_kuramoto_R", folder, file_extension="png")
-        plt.savefig(png_path, dpi=150, bbox_inches="tight")
-        plt.close()
-
-        logger.log("INFO", f"Saved sync metrics: {csv_path} and {png_path}")
     
     def make_iteration(mute=False):
         now_s = Exp.sim_time_s
@@ -211,6 +174,10 @@ class Exp( ):
             # Play music event if any
             if music_event is not None and Exp.has_music[rb.id]:
                 logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
-                rb.play_note(music_event[0], music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
+                rb.play_note((music_event[0]%12)+60, music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
+                Exp.notes_history.append((now_s, music_event[0]))
+                if Exp.my_controller[rb.id].beat_to_play is not None:
+                    Exp.beat_played_history.append((now_s, Exp.my_controller[rb.id].beat_to_play))
+
         Exp.iter += 1
         Exp.sim_time_s += dt_s
