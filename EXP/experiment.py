@@ -19,9 +19,14 @@ class Exp( ):
     has_music = [False]* len(Arena.robot)
     has_ir_comm = [False]* len(Arena.robot)
     midi          = MidiRecorder(tempo_bpm=120.0)  # Global MIDI recorder for the experiment
-    phase_sync_history = []   # list of (time_s, sync)
-    notes_history = []        # list of (time_s, note)
-    beat_played_history = []   # list of (time_s, beat)
+    phase_sync_history = [[]]   # list of list for multiples trials
+    notes_history = [[]]        # list of list
+    beat_played_history = [[]]   # list of list
+
+    current_phase_sync_history = []   # list of (time_s, sync) for the current trial
+    current_notes_history = []        # list of (time_s, note) for the current trial
+    current_beat_played_history = []   # list of (time_s, beat) for the current trial
+
     ir_medium      = IRMedium(config=IRCommConfig( 
         range_m=0.5,
         fov_deg=180.0,
@@ -46,6 +51,10 @@ class Exp( ):
         Exp.my_controller = [None] * len(Arena.robot)
         Exp.has_music = [False]* len(Arena.robot)
         Exp.has_ir_comm = [False]* len(Arena.robot)
+
+        Exp.phase_sync_history = []
+        Exp.notes_history = [] 
+        Exp.beat_played_history = []
         
         for rb in Arena.robot:
             if hasattr(rb, 'play_note'):
@@ -57,15 +66,33 @@ class Exp( ):
                 Exp.my_controller[rb.id] = Fsm(0.6, 50)
     
     def init_single_trial():
+        # reset robot position and rotation
         for e in range (len(Arena.robot)):
             id = Arena.robot[e].id
             np.copyto(Arena.robot[id].pos, Arena.robot[id].init_pos )
             np.copyto(Arena.robot[id].rot, Arena.robot[id].init_rot )
+
         Exp.iter = 0
         Exp.sim_time_s = 0.0
-        Exp.phase_sync_history = []
-        Exp.notes_history = []
-        Exp.beat_played_history = []
+
+        #reset contrlers
+        Exp.my_controller = [None] * len(Arena.robot)
+        Exp.has_music = [False]* len(Arena.robot)
+        Exp.has_ir_comm = [False]* len(Arena.robot)
+        for rb in Arena.robot:
+            if hasattr(rb, 'play_note'):
+                Exp.has_music[rb.id] = True
+                Exp.my_controller[rb.id] = SwarmMusicFsm(0.6, 50)
+            if hasattr(rb, 'ir_comm'):
+                Exp.has_ir_comm[rb.id] = True
+            else:
+                Exp.my_controller[rb.id] = Fsm(0.6, 50)
+
+        #reste current history
+        Exp.current_phase_sync_history = []
+        Exp.current_notes_history = []
+        Exp.current_beat_played_history = []
+
         # Start the Midi recording if the robots are music bots
         if any(isinstance(rb, MusicBot) for rb in Arena.robot):
             
@@ -85,15 +112,19 @@ class Exp( ):
                 Exp.midi.write_midi(build_filename(f"trial_{Exp.trial}", "MIDI/midi_records") )
                 logger.log("INFO", f"Trial {Exp.trial} ended. MIDI file saved as 'trial_{Exp.trial}.mid'.")
                 Exp.midi.stop() 
-                save_sync_plot_and_csv(Exp.phase_sync_history, f"trial_{Exp.trial}", "metrics/phase_sync")
-                save_harmonic_scale_plot(Exp.notes_history, f"trial_{Exp.trial}", "metrics/harmonic_scales")
-                save_beat_played_plot(Exp.beat_played_history, f"trial_{Exp.trial}", "metrics/beat_played")
+                # add the history to the list of history for all trials
+                Exp.phase_sync_history.append(Exp.current_phase_sync_history)
+                Exp.notes_history.append(Exp.current_notes_history)
+                Exp.beat_played_history.append(Exp.current_beat_played_history)
             return False
         else:
             return True
     
     def finalise_all_trials( ):
         if( Exp.trial >= Exp.num_trials):
+            save_sync_plot(Exp.phase_sync_history, f"trial_{Exp.trial}", "metrics/phase_sync")
+            #save_harmonic_scale_plot(Exp.notes_history, f"trial_{Exp.trial}", "metrics/harmonic_scales")
+            #save_beat_played_plot(Exp.beat_played_history, f"trial_{Exp.trial}", "metrics/beat_played")
             return False
         else:
             return True
@@ -145,7 +176,7 @@ class Exp( ):
             kuramoto_conf_max = np.max([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
             kuramoto_conf_mean = np.mean([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
             if sync is not None:
-                Exp.phase_sync_history.append((now_s, sync, kuramoto_conf_min, kuramoto_conf_mean, kuramoto_conf_max))
+                Exp.current_phase_sync_history.append((now_s, sync, kuramoto_conf_min, kuramoto_conf_mean, kuramoto_conf_max))
                 logger.log("TIME", f"sync={sync:.3f}, Kuramoto confidence (min/mean/max)={kuramoto_conf_min:.3f}/{kuramoto_conf_mean:.3f}/{kuramoto_conf_max:.3f}")
 
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
@@ -175,9 +206,9 @@ class Exp( ):
             if music_event is not None and Exp.has_music[rb.id]:
                 logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
                 rb.play_note((music_event[0]%12)+60, music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
-                Exp.notes_history.append((now_s, music_event[0]))
+                Exp.current_notes_history.append((now_s, music_event[0]))
                 if Exp.my_controller[rb.id].beat_to_play is not None:
-                    Exp.beat_played_history.append((now_s, Exp.my_controller[rb.id].beat_to_play))
+                    Exp.current_beat_played_history.append((now_s, Exp.my_controller[rb.id].beat_to_play))
 
         Exp.iter += 1
         Exp.sim_time_s += dt_s

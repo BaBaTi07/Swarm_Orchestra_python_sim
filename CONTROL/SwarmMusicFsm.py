@@ -19,7 +19,7 @@ class SwarmMusicFsm(Fsm):
         self.beat_to_play = int(np.random.randint(0, self.nbr_beats))
         self.beat_duration_s = self.cicle_time_s / self.nbr_beats
 
-        self.K = 1.5 # Kuramoto coupling strength
+        self.K = 0.5 # Kuramoto coupling strength
         self.theta = float(2.0 * np.pi * np.random.rand())  # initial phase of the internal clock
         self.kuramoto_conf = 0.5 #confidence in sync [0-1] increase when same theta, decrease when opposite theta
 
@@ -69,7 +69,6 @@ class SwarmMusicFsm(Fsm):
                 self.communication_cooldown_timer = 0.0
         return wheels
     
-
     def check_for_collisions( self, ir_readings: NDArray[np.float64] ):
         index = [3,4]
         ir = np.delete(ir_readings, index)
@@ -87,7 +86,7 @@ class SwarmMusicFsm(Fsm):
     def generate_random_note_event(self):
         """(midi, duration_s, volume)"""
         return (int(12*np.random.rand()), self.beat_duration_s, self.kuramoto_conf)
-    
+
     def choose_beat_to_play(self, neighbor_beats):
         """chose the beat to play based on the beat recived from neighbors,
            if neighbor play the same beat, probabilisticly (0.7) change to a non played beat,
@@ -102,8 +101,6 @@ class SwarmMusicFsm(Fsm):
                     return new_beat
                 
         return self.beat_to_play
-        
-
     
     def generate_note_to_play(self, msgs):
         """chose the note to play based on the three last diferent recived notes"""
@@ -164,7 +161,7 @@ class SwarmMusicFsm(Fsm):
         """Convert an 8-bit payload from IR communication back to an internal clock phase (theta)."""
         return (payload / 128.0) * (2.0 * np.pi)
     
-    def Kuramoto_update(self, msgs, cicle_time_s, dt_s, theta):
+    def Kuramoto_update_confidence_based(self, msgs, cicle_time_s, dt_s, theta):
         """ Kuramoto-like synchronization: adjust internal clock phase based on received messages"""
         T = float(cicle_time_s)
         omega = (2.0 * np.pi) / T
@@ -198,6 +195,59 @@ class SwarmMusicFsm(Fsm):
         # if diff is moderate, we do not change confidence
         self.kuramoto_conf = max(0.0, min(1.0, self.kuramoto_conf))  #[0, 1]
 
+    def angle_diff(self, a, b):
+        d = (a - b + np.pi) % (2.0 * np.pi) - np.pi
+        return d
+
+    def Kuramoto_update_local_error_based(self, msgs, cycle_time_s, dt_s, theta):
+        T = float(cycle_time_s)
+        omega = (2.0 * np.pi) / T
+
+        theta_dot = omega
+
+        if msgs:
+            s = 0.0
+            err = 0.0
+            n = 0
+
+            for msg in msgs:
+                theta_j = self.payload_to_theta(msg.payload)
+                d = self.angle_diff(theta_j, theta)
+
+                s += np.sin(d)
+                err += abs(d)
+                n += 1
+
+            s /= n
+            err /= n 
+
+            # erreur max pertinente ~ pi
+            err_norm = min(1.0, err / np.pi)
+
+            K_min = 0.05
+            K_max = self.K
+            K_eff = K_min + (K_max - K_min) * err_norm
+
+            theta_dot += K_eff * s
+
+        theta = (theta + theta_dot * dt_s) % (2.0 * np.pi)
+        return (theta / (2.0 * np.pi)) * T, theta
+
+    def Kuramoto_update_basic(self, msgs, cycle_time_s, dt_s, theta):
+        T = float(cycle_time_s)
+        omega = (2.0 * np.pi) / T
+        theta_dot = omega
+        s = 0.0
+
+        for msg in msgs:
+            theta_j = self.payload_to_theta(msg.payload)
+            s += np.sin(theta_j - theta)
+        s/= len(msgs) if msgs else 1
+        theta_dot += self.K * s
+
+        theta = (theta + theta_dot * dt_s) % (2.0 * np.pi)
+        return (theta / (2.0 * np.pi)) * T, theta
+
     def update(self, ir_readings: NDArray[np.float64], msgs: list, time_s: float, dt_s: float):
 
         note_event = None
@@ -225,7 +275,7 @@ class SwarmMusicFsm(Fsm):
                 synch_msg.append(msg)
 
         # Kuramoto --> internal clock time and phase"""
-        self.internal_clock, self.theta = self.Kuramoto_update(synch_msg, self.cicle_time_s, dt_s, self.theta)
+        self.internal_clock, self.theta = self.Kuramoto_update_basic(synch_msg, self.cicle_time_s, dt_s, self.theta)
 
         note_to_play = self.generate_note_to_play(note_msg)
         self.beat_to_play = self.choose_beat_to_play(neighbor_beats_played)

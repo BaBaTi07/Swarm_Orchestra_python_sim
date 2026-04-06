@@ -2,7 +2,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from SENSORS.ultrasonic_sensors import Ultrasonic_sensors
-from SENSORS.ir_comm import IRComm
 from SENSORS.music_module import MusicModule
 from MIDI.midi_recorder import MidiRecorder
 from SENSORS.ir_comm import IRComm, IRCommConfig

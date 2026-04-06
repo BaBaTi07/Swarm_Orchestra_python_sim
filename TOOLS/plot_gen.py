@@ -14,41 +14,143 @@ def build_filename( base_name: str, folder: str, file_extension: str = "mid" ) -
 
     return folder / f"{base_name}_{timestamp}.{file_extension}"
 
-def save_sync_plot_and_csv(phase_sync_history,base_name: str, folder: str = "metrics/sync"):
+def interpolate_runs(all_runs, value_col: int, time_grid: np.ndarray):
+
+    interpolated = []
+
+    for run in all_runs:
+        if not run:
+            continue
+
+        data = np.array(run, dtype=float)
+        if data.ndim != 2 or data.shape[1] <= value_col:
+            continue
+
+        # sort by time
+        data = data[np.argsort(data[:, 0])]
+        t = data[:, 0]
+        y = data[:, value_col]
+
+        # remove duplicate times if any
+        uniq_t, uniq_idx = np.unique(t, return_index=True)
+        y = y[uniq_idx]
+        t = uniq_t
+
+        if len(t) < 2:
+            continue
+
+        # interpolate only inside valid interval, NaN outside
+        yi = np.interp(time_grid, t, y)
+        yi[time_grid < t[0]] = np.nan
+        yi[time_grid > t[-1]] = np.nan
+
+        interpolated.append(yi)
+
+    if not interpolated:
+        return np.empty((0, len(time_grid)))
+
+    return np.array(interpolated, dtype=float)
+
+def save_sync_plot(phase_sync_history, base_name: str, folder: str = "metrics/sync"):
 
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
 
     if not phase_sync_history:
         return
+    
+    # determine common max time from all runs
+    t_max  = phase_sync_history[0][-1][0] if phase_sync_history[0] else 0.0
+    time_grid = np.arange(0.0, t_max + 1e-9, 1.0)
 
-    data = np.array(phase_sync_history, dtype=float)
-    t = data[:, 0]
-    R = data[:, 1]
-    min_conf = data[:, 2]
-    mean_conf = data[:, 3] 
-    max_conf = data[:, 4]
+    # interpolate metrics
+    R_mat        = interpolate_runs(phase_sync_history, value_col=1, time_grid=time_grid)
+    min_conf_mat = interpolate_runs(phase_sync_history, value_col=2, time_grid=time_grid)
+    mean_conf_mat= interpolate_runs(phase_sync_history, value_col=3, time_grid=time_grid)
+    max_conf_mat = interpolate_runs(phase_sync_history, value_col=4, time_grid=time_grid)
 
-    # CSV
-    csv_path = build_filename(f"{base_name}_kuramoto_R", folder, file_extension="csv")
-    np.savetxt(csv_path, data, delimiter=",", header="time_s,R,kuramoto_conf_min,kuramoto_conf_mean,kuramoto_conf_max", comments="")
+    def stats(mat):
+        if mat.size == 0:
+            return {
+                "mean": np.array([]),
+                "median": np.array([]),
+                "q25": np.array([]),
+                "q75": np.array([]),
+            }
+
+        mean = np.full(mat.shape[1], np.nan)
+        median = np.full(mat.shape[1], np.nan)
+        q25 = np.full(mat.shape[1], np.nan)
+        q75 = np.full(mat.shape[1], np.nan)
+
+        for i in range(mat.shape[1]):
+            col = mat[:, i]
+            col = col[~np.isnan(col)]
+            if len(col) == 0:
+                continue
+
+            mean[i] = np.mean(col)
+            median[i] = np.median(col)
+            q25[i] = np.percentile(col, 25)
+            q75[i] = np.percentile(col, 75)
+
+        return {
+            "mean": mean,
+            "median": median,
+            "q25": q25,
+            "q75": q75,
+        }
+
+    R_stats = stats(R_mat)
 
     # Plot
     plt.figure()
-    plt.plot(t, R, label="Phase Sync R")
-    plt.plot(t, min_conf, label="Kuramoto Confidence Min", linestyle='--')
-    plt.plot(t, mean_conf, label="Kuramoto Confidence Mean", linestyle='--')
-    plt.plot(t, max_conf, label="Kuramoto Confidence Max", linestyle='--')
+
+    # R: middle 50% + median + mean
+    plt.fill_between(time_grid, R_stats["q25"], R_stats["q75"], alpha=0.20, label="Phase Sync R - middle 50%")
+    plt.plot(time_grid, R_stats["median"], linewidth=2.5, label="Phase Sync R median")
+    plt.plot(time_grid, R_stats["mean"], linestyle="--", linewidth=1.8, label="Phase Sync R mean")
+
+    # sparse boxplots for R
+    box_times = np.arange(0.0, t_max + 1e-9, 20.0)
+    box_idx = [np.argmin(np.abs(time_grid - bt)) for bt in box_times]
+
+    box_data = []
+    box_positions = []
+    for idx in box_idx:
+        vals = R_mat[:, idx]
+        vals = vals[~np.isnan(vals)]
+        if len(vals) > 0:
+            box_data.append(vals)
+            box_positions.append(time_grid[idx])
+
+    if box_data:
+        plt.boxplot(
+            box_data,
+            positions=box_positions,
+            widths=20.0 * 0.35,
+            manage_ticks=False,
+            patch_artist=True,
+            boxprops=dict(alpha=0.25),
+            medianprops=dict(linewidth=1.5),
+            whiskerprops=dict(linewidth=1.0),
+            capprops=dict(linewidth=1.0),
+            flierprops=dict(marker='o', markersize=3, alpha=0.5),
+        )
+
     plt.xlabel("Simulation time (s)")
-    plt.ylabel("Kuramoto order parameter R")
-    plt.title("Synchronization over time")
+    plt.ylabel("Value")
+    plt.title("Synchronization over time across multiple runs")
+    plt.ylim(-0.02, 1.05)
+    plt.grid(True, alpha=0.25)
     plt.legend()
-    png_path = build_filename(f"{base_name}_kuramoto_R", folder, file_extension="png")
-    plt.savefig(png_path, dpi=150, bbox_inches="tight")
-    plt.savefig('metrics/last/last_Kuramoto_sync.png', dpi=150, bbox_inches="tight")
+    plt.tight_layout()
+
+    png_path = build_filename(f"{base_name}_sync_aggregate", folder, file_extension="png")
+    plt.savefig(png_path, dpi=180, bbox_inches="tight")
     plt.close()
 
-    logger.log("INFO", f"Saved sync metrics: {csv_path} and {png_path}")
+    logger.log("INFO", f"Saved sync metrics:{png_path}")
 
 def save_harmonic_scale_plot(notes_history, base_name: str, folder: str = "metrics/harmonic_scales"):
     """scan each scale and count how many notes each second belong to it,
