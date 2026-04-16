@@ -7,6 +7,7 @@ from MIDI.midi_recorder import MidiRecorder
 from WORLD.musicbot import MusicBot
 from SENSORS.ir_comm import IRMedium, IRCommConfig
 from TOOLS.plot_gen import *
+from CONTROL.sync_algo import SyncAlgo
 
 class Exp( ):
     num_trials     = 0
@@ -161,8 +162,8 @@ class Exp( ):
         thetas = []
 
         for rb in Arena.robot:
-            if hasattr(Exp.my_controller[rb.id], "theta"):
-                thetas.append(Exp.my_controller[rb.id].theta)
+            if hasattr(Exp.my_controller[rb.id], "sync_algo") and hasattr(Exp.my_controller[rb.id].sync_algo, "theta"):
+                thetas.append(Exp.my_controller[rb.id].sync_algo.theta)
 
         if not thetas:
             return None
@@ -184,9 +185,9 @@ class Exp( ):
         # Compute and log synchronization metric
         if now_s%2 <= dt_s:  
             sync = Exp.compute_phase_sync()
-            kuramoto_conf_min = np.min([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
-            kuramoto_conf_max = np.max([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
-            kuramoto_conf_mean = np.mean([Exp.my_controller[rb.id].kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "kuramoto_conf")])
+            kuramoto_conf_min = np.min([Exp.my_controller[rb.id].sync_algo.kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "sync_algo") and hasattr(Exp.my_controller[rb.id].sync_algo, "kuramoto_conf")])
+            kuramoto_conf_max = np.max([Exp.my_controller[rb.id].sync_algo.kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "sync_algo") and hasattr(Exp.my_controller[rb.id].sync_algo, "kuramoto_conf")])
+            kuramoto_conf_mean = np.mean([Exp.my_controller[rb.id].sync_algo.kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "sync_algo") and hasattr(Exp.my_controller[rb.id].sync_algo, "kuramoto_conf")])
             if sync is not None:
                 Exp.current_phase_sync_history.append((now_s, sync, kuramoto_conf_min, kuramoto_conf_mean, kuramoto_conf_max))
                 logger.log("TIME", f"sync={sync:.3f}, Kuramoto confidence (min/mean/max)={kuramoto_conf_min:.3f}/{kuramoto_conf_mean:.3f}/{kuramoto_conf_max:.3f}")
