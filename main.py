@@ -15,6 +15,7 @@ def preamble( ):
     parser.add_argument("-viewing", type=bool, help="if true it triggers the graphical mode")
     parser.add_argument("-log", type=str, help="set the log level (DEBUG, INFO, WARN, ERROR, NONE)")
     parser.add_argument("-instrument", type=str, help="set the instrument directory (if none -> Basic sound waveforms will be used)")
+    parser.add_argument("-name", type=str, help="name of the experiment")
     parser.set_defaults(seed = 0, viewing=False)
     args = parser.parse_args()
     
@@ -22,6 +23,11 @@ def preamble( ):
         n_seed = args.seed
     else:
         n_seed = None
+
+    if args.name:
+        Exp.set_name(args.name)
+    else:
+        Exp.set_name(None)
         
     if not args.file:
         f_name = "json_files/experiment_0.json"

@@ -35,8 +35,15 @@ class Exp( ):
         drop_prob=0.0,       
         enabled=True         
     ))
+
+    def set_name(name):
+        Exp.name = name
  
     def reset():
+        """
+        reset to initial state for all trials, should be only called before starting the experiment
+        not to be called between trials, use reset_single_trial instead
+        """
         Exp.my_controller = []
         Exp.trial = 0
         Exp.iter  = 0
@@ -46,26 +53,7 @@ class Exp( ):
         Exp.has_music = [False]* len(Arena.robot)
         Exp.has_ir_comm = [False]* len(Arena.robot)
 
-    def init_all_trials():
-        Exp.trial = 0
-        Exp.my_controller = [None] * len(Arena.robot)
-        Exp.has_music = [False]* len(Arena.robot)
-        Exp.has_ir_comm = [False]* len(Arena.robot)
-
-        Exp.phase_sync_history = []
-        Exp.notes_history = [] 
-        Exp.beat_played_history = []
-        
-        for rb in Arena.robot:
-            if hasattr(rb, 'play_note'):
-                Exp.has_music[rb.id] = True
-                Exp.my_controller[rb.id] = SwarmMusicFsm(0.6, 50)
-            if hasattr(rb, 'ir_comm'):
-                Exp.has_ir_comm[rb.id] = True
-            else:
-                Exp.my_controller[rb.id] = Fsm(0.6, 50)
-    
-    def init_single_trial():
+    def reset_single_trial():
         # reset robot position and rotation
         for e in range (len(Arena.robot)):
             id = Arena.robot[e].id
@@ -79,12 +67,25 @@ class Exp( ):
         Exp.my_controller = [None] * len(Arena.robot)
         Exp.has_music = [False]* len(Arena.robot)
         Exp.has_ir_comm = [False]* len(Arena.robot)
+
+        Exp.ir_medium = IRMedium(config=IRCommConfig(
+            range_m=0.5,
+            fov_deg=180.0,
+            max_process_rate_s=6.0,
+            max_inbox=64,
+            drop_prob=0.0,
+            enabled=True
+        ))
+        
         for rb in Arena.robot:
-            if hasattr(rb, 'play_note'):
-                Exp.has_music[rb.id] = True
+            Exp.has_music[rb.id] = hasattr(rb, 'play_note')
+            Exp.has_ir_comm[rb.id] = hasattr(rb, 'ir_comm')
+
+            if Exp.has_ir_comm[rb.id]:
+                rb.ir_comm.reset()
+
+            if Exp.has_music[rb.id]:
                 Exp.my_controller[rb.id] = SwarmMusicFsm(0.6, 50)
-            if hasattr(rb, 'ir_comm'):
-                Exp.has_ir_comm[rb.id] = True
             else:
                 Exp.my_controller[rb.id] = Fsm(0.6, 50)
 
@@ -92,6 +93,15 @@ class Exp( ):
         Exp.current_phase_sync_history = []
         Exp.current_notes_history = []
         Exp.current_beat_played_history = []
+
+    def init_all_trials():
+        Exp.trial = 0
+        Exp.phase_sync_history = []
+        Exp.notes_history = [] 
+        Exp.beat_played_history = []
+    
+    def init_single_trial():
+        Exp.reset_single_trial()
 
         # Start the Midi recording if the robots are music bots
         if any(isinstance(rb, MusicBot) for rb in Arena.robot):
@@ -112,6 +122,8 @@ class Exp( ):
                 Exp.midi.write_midi(build_filename(f"trial_{Exp.trial}", "MIDI/midi_records") )
                 logger.log("INFO", f"Trial {Exp.trial} ended. MIDI file saved as 'trial_{Exp.trial}.mid'.")
                 Exp.midi.stop() 
+                save_beat_played_plot(Exp.current_beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played")
+                save_harmonic_scale_plot(Exp.current_notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales")
                 # add the history to the list of history for all trials
                 Exp.phase_sync_history.append(Exp.current_phase_sync_history)
                 Exp.notes_history.append(Exp.current_notes_history)
@@ -122,9 +134,9 @@ class Exp( ):
     
     def finalise_all_trials( ):
         if( Exp.trial >= Exp.num_trials):
-            save_sync_plot(Exp.phase_sync_history, f"trial_{Exp.trial}", "metrics/phase_sync")
-            #save_harmonic_scale_plot(Exp.notes_history, f"trial_{Exp.trial}", "metrics/harmonic_scales")
-            #save_beat_played_plot(Exp.beat_played_history, f"trial_{Exp.trial}", "metrics/beat_played")
+            save_sync_plot(Exp.phase_sync_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/phase_sync")
+            generate_multiple_execution_beat_evenness_graph(Exp.beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played/multiple_trials")
+            generate_multiple_execution_harmonic_graph(Exp.notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales/multiple_trials")
             return False
         else:
             return True

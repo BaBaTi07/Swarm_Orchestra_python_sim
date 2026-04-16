@@ -103,6 +103,19 @@ def save_sync_plot(phase_sync_history, base_name: str, folder: str = "metrics/sy
 
     R_stats = stats(R_mat)
 
+    # global mean over all runs and all time steps
+    global_sync_mean = np.nan
+    valid_R = R_mat[~np.isnan(R_mat)]
+    if valid_R.size > 0:
+        global_sync_mean = np.mean(valid_R)
+
+    #global mean after 200 seconds to focus on steady state
+    global_sync_mean_steady = np.nan
+    steady_state_data = R_mat[:, time_grid >= 200]
+    valid_steady_state_data = steady_state_data[~np.isnan(steady_state_data)]
+    if valid_steady_state_data.size > 0:
+        global_sync_mean_steady = np.mean(valid_steady_state_data)
+
     # Plot
     plt.figure()
 
@@ -110,7 +123,22 @@ def save_sync_plot(phase_sync_history, base_name: str, folder: str = "metrics/sy
     plt.fill_between(time_grid, R_stats["q25"], R_stats["q75"], alpha=0.20, label="Phase Sync R - middle 50%")
     plt.plot(time_grid, R_stats["median"], linewidth=2.5, label="Phase Sync R median")
     plt.plot(time_grid, R_stats["mean"], linestyle="--", linewidth=1.8, label="Phase Sync R mean")
-
+    if not np.isnan(global_sync_mean):
+        plt.text(
+            0.01, 0.01,
+            f"Global mean sync = {global_sync_mean:.3f}",
+            transform=plt.gca().transAxes,
+            fontsize=10,
+            verticalalignment='bottom'
+        )
+    if not np.isnan(global_sync_mean_steady):
+        plt.text(
+            0.01, 0.06,
+            f"Global mean after 200s = {global_sync_mean_steady:.3f}",
+            transform=plt.gca().transAxes,
+            fontsize=10,
+            verticalalignment='bottom'
+        )
     # sparse boxplots for R
     box_times = np.arange(0.0, t_max + 1e-9, 20.0)
     box_idx = [np.argmin(np.abs(time_grid - bt)) for bt in box_times]
@@ -140,7 +168,7 @@ def save_sync_plot(phase_sync_history, base_name: str, folder: str = "metrics/sy
 
     plt.xlabel("Simulation time (s)")
     plt.ylabel("Value")
-    plt.title("Synchronization over time across multiple runs")
+    plt.title(f"Synchronization : {base_name}")
     plt.ylim(-0.02, 1.05)
     plt.grid(True, alpha=0.25)
     plt.legend()
@@ -353,3 +381,193 @@ def save_beat_played_plot(beat_played_history, base_name: str, folder: str = "me
     plt.savefig(f"{name}_beat_counts.png", dpi=200)
     plt.savefig("metrics/last/last_beat_count.png",dpi = 200)
     plt.close() 
+
+def generate_multiple_execution_harmonic_graph(all_notes_history, base_name: str, folder: str = "metrics/harmonic_scales", time_interval: float = 3.0, min_time: float = 5.0):
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    if not all_notes_history:
+        return
+
+    processed_runs = []
+
+    for run in all_notes_history:
+        if not run:
+            continue
+
+        data = np.array(run, dtype=float)
+        if data.ndim != 2 or data.shape[1] < 2:
+            continue
+
+        data = data[np.argsort(data[:, 0])]
+        data = data[data[:, 0] >= min_time]
+
+        if len(data) == 0:
+            continue
+
+        max_time = data[-1, 0]
+        time_bins = np.arange(min_time, np.floor(max_time) + 1e-9, time_interval)
+
+        scores = []
+        for t in time_bins:
+            notes_in_interval = data[(data[:, 0] >= t) & (data[:, 0] < t + time_interval), 1].astype(int)
+
+            if len(notes_in_interval) == 0:
+                scores.append(np.nan)
+                continue
+
+            best_score = 0.0
+            for scale in Scales:
+                count_in_scale = sum((note % 12) in scale.notes for note in notes_in_interval)
+                percent_in_scale = 100.0 * count_in_scale / len(notes_in_interval)
+                best_score = max(best_score, percent_in_scale)
+
+            scores.append(best_score)
+
+        if len(time_bins) > 0:
+            processed_runs.append((time_bins, np.array(scores, dtype=float)))
+
+    if not processed_runs:
+        logger.log("WARNING", "No valid notes_history found for harmonic aggregate plot")
+        return
+
+    t_max = max(t[-1] for t, _ in processed_runs)
+    time_grid = np.arange(min_time, t_max + 1e-9, time_interval)
+
+    mat = []
+    for t, y in processed_runs:
+        yi = np.interp(time_grid, t, y)
+        yi[time_grid < t[0]] = np.nan
+        yi[time_grid > t[-1]] = np.nan
+        mat.append(yi)
+
+    mat = np.array(mat, dtype=float)
+
+    mean = np.nanmean(mat, axis=0)
+    median = np.nanmedian(mat, axis=0)
+    q25 = np.nanpercentile(mat, 25, axis=0)
+    q75 = np.nanpercentile(mat, 75, axis=0)
+
+    plt.figure(figsize=(10, 5))
+    plt.fill_between(time_grid, q25, q75, alpha=0.20, label="middle 50%")
+    plt.plot(time_grid, median, linewidth=2.5, label="median")
+    plt.plot(time_grid, mean, linestyle="--", linewidth=1.8, label="mean")
+
+    plt.xlabel("Time (s)")
+    plt.ylabel("% harmonically synchronized")
+    plt.title("Harmonic synchronization across multiple runs")
+    plt.ylim(0, 105)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+
+    png_path = build_filename(f"{base_name}_harmonic_sync_aggregate", folder, file_extension="png")
+    plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    plt.close()
+
+    logger.log("INFO", f"Saved harmonic aggregate graph: {png_path}")
+
+
+def generate_multiple_execution_beat_evenness_graph(all_beat_played_history, base_name: str, folder: str = "metrics/beat_played", window_s: float = 2.0, n_beats: int = 4):
+
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    if not all_beat_played_history:
+        return
+
+    sigma2_best = 0.0
+    sigma2_worst = np.var([1.0] + [0.0] * (n_beats - 1))
+
+    processed_runs = []
+
+    for run in all_beat_played_history:
+        if not run:
+            continue
+
+        data = np.array(run, dtype=float)
+        if data.ndim != 2 or data.shape[1] < 2:
+            continue
+
+        data = data[np.argsort(data[:, 0])]
+        times = data[:, 0]
+        beats = data[:, 1].astype(int)
+
+        evenness_times = []
+        evenness_values = []
+
+        for t in times:
+            t_min = t - window_s
+
+            mask = (times >= t_min) & (times <= t)
+            window_beats = beats[mask]
+
+            if np.any((window_beats < 0) | (window_beats >= n_beats)):
+                logger.log(
+                    "WARNING",
+                    f"Found beat numbers out of range [0, {n_beats-1}] in beat_played_history. They will be ignored."
+                )
+
+            window_beats = window_beats[(window_beats >= 0) & (window_beats < n_beats)]
+
+            if len(window_beats) == 0:
+                continue
+
+            counts = np.zeros(n_beats, dtype=int)
+            for b in window_beats:
+                counts[b] += 1
+
+            proportions = counts / len(window_beats)
+            sigma2 = np.var(proportions)
+
+            evenness = (sigma2 - sigma2_best) / (sigma2_worst - sigma2_best)
+            evenness = float(np.clip(evenness, 0.0, 1.0))
+
+            evenness_times.append(t)
+            evenness_values.append(evenness)
+
+        if len(evenness_times) > 1:
+            processed_runs.append((
+                np.array(evenness_times, dtype=float),
+                np.array(evenness_values, dtype=float)
+            ))
+
+    if not processed_runs:
+        logger.log("WARNING", "No valid beat_played_history found for aggregate evenness plot")
+        return
+
+    t_max = max(t[-1] for t, _ in processed_runs)
+    time_grid = np.arange(0.0, t_max + 1e-9, 1.0)
+
+    mat = []
+    for t, y in processed_runs:
+        yi = np.interp(time_grid, t, y)
+        yi[time_grid < t[0]] = np.nan
+        yi[time_grid > t[-1]] = np.nan
+        mat.append(yi)
+
+    mat = np.array(mat, dtype=float)
+
+    mean = np.nanmean(mat, axis=0)
+    median = np.nanmedian(mat, axis=0)
+    q25 = np.nanpercentile(mat, 25, axis=0)
+    q75 = np.nanpercentile(mat, 75, axis=0)
+
+    plt.figure(figsize=(10, 5))
+    plt.fill_between(time_grid, q25, q75, alpha=0.20, label="middle 50%")
+    plt.plot(time_grid, median, linewidth=2.5, label="median")
+    plt.plot(time_grid, mean, linestyle="--", linewidth=1.8, label="mean")
+
+    plt.xlabel("Time (s)")
+    plt.ylabel("Beat distribution evenness ε(t)")
+    plt.title(f"Beat Distribution Evenness across multiple runs (window = {window_s:.2f}s)")
+    plt.ylim(-0.02, 1.02)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+
+    png_path = build_filename(f"{base_name}_beat_evenness_aggregate", folder, file_extension="png")
+    plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    plt.close()
+
+    logger.log("INFO", f"Saved aggregate beat evenness graph: {png_path}")
