@@ -4,6 +4,7 @@ from CONTROL.fsm import Fsm
 from TOOLS.logger import logger
 from TOOLS.scales import Scales
 from CONTROL.sync_algo import SyncAlgo
+from CONTROL.harmony_algo import HarmonyAlgo
 
 class SwarmMusicFsm(Fsm):
 
@@ -14,7 +15,7 @@ class SwarmMusicFsm(Fsm):
         self.waiting_time = 0
         self.cicle_time_s = 2.0  # time of a full cycle of the internal clock
         self.nbr_beats = 4  # number of beats in a cycle
-        self.beat_to_play = 1 #int(np.random.randint(0, self.nbr_beats))
+        self.beat_to_play = int(np.random.randint(0, self.nbr_beats))
         self.beat_duration_s = self.cicle_time_s / self.nbr_beats
 
         self.communication_time = 3.0 # time for witch the robot will stop and comunicate when recieving a message
@@ -40,6 +41,15 @@ class SwarmMusicFsm(Fsm):
             K=0.5,
             self_phase_weight=0.25,
             max_memory_cycles=60
+        )
+
+        self.harmony_algo = HarmonyAlgo(
+            nbr_beats=self.nbr_beats,
+            beat_duration_s=self.beat_duration_s,
+            note_memory_ttl_s=5.0,
+            beat_memory_ttl_s=5.0,
+            same_captor_merge_ttl_s=1.0, # anti-duplication
+            fallback_volume=0.6
         )
 
     def update_communication(self, dt_s, msgs):
@@ -183,11 +193,37 @@ class SwarmMusicFsm(Fsm):
         # time synchronization
         self.sync_algo.update(synch_msg, time_s, dt_s)
 
-        note_to_play = self.generate_note_to_play(note_msg)
-        self.beat_to_play = self.choose_beat_to_play(neighbor_beats_played)
+        note_to_play, chosen_beat, harmony_debug = self.harmony_algo.update(
+            note_msgs=note_msg,
+            current_note_event=self.last_played_note,
+            current_beat=self.beat_to_play,
+            time_s=time_s
+        )
+
+        if note_to_play is None and self.last_played_note is None:
+            note_to_play = self.generate_random_note_event()
+            chosen_beat = self.beat_to_play
+
+        if harmony_debug["used_fallback"]:
+            logger.log("WARN", f"HarmonyAlgo fallback: {harmony_debug['reason']}")
+            note_to_play = self.generate_note_to_play(note_msg)
+            chosen_beat = self.choose_beat_to_play(neighbor_beats_played)
+        else:
+            logger.log(
+                "DEBUG",
+                f"HarmonyAlgo ok: scale={harmony_debug['scale']}, "
+                f"chord={harmony_debug['chord_notes']}, beat={harmony_debug['beat']}, "
+                f"reason={harmony_debug['reason']}"
+            )
+
+        self.beat_to_play = chosen_beat
+        self.last_played_note = note_to_play
+
+        #déclanchement de la note au bon moment
         if self.sync_algo.internal_clock < (dt_s + self.beat_duration_s * self.beat_to_play) and self.sync_algo.internal_clock + dt_s >= (self.beat_duration_s * self.beat_to_play): 
             note_event = note_to_play
             
+        #send a message if someting around    
         if self.check_for_things_around( ir_readings ):
             if self.note_or_clock:
                 msg_snd = self.generate_ir_message(note=note_to_play[0], beat=self.beat_to_play)  # send note message
