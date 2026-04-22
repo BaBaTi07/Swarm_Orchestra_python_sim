@@ -9,7 +9,7 @@ class HarmonyAlgo:
 
     Goals:
     - keep local/global convergence toward a common scale
-    - allow punctual emergence of local major triads
+    - allow punctual emergence of local chords
     - keep current chord while neighbors remain compatible
     - avoid global collapse toward one single beat
 
@@ -25,7 +25,12 @@ class HarmonyAlgo:
     - debug info dict
     """
 
-    MAJOR_TRIAD = (0, 4, 7)
+    CHORD_PATTERNS = {
+        "major": (0, 4, 7),
+        "minor": (0, 3, 7),
+        "sus2":  (0, 2, 7),
+        "sus4":  (0, 5, 7)
+    }
 
     def __init__(
         self,
@@ -96,6 +101,8 @@ class HarmonyAlgo:
         self.forbidden_pair_ttl_s = forbidden_pair_ttl_s
         # key: (note_mod, beat) -> until_time_s
         self.forbidden_note_beat_pairs = {}
+
+        self.current_chord_name = None
 
     # ------------------------------------------------------------------
     # Parsing / memory
@@ -184,7 +191,7 @@ class HarmonyAlgo:
         Choose a compatible local scale.
         Selection criteria:
         1. cover all recent distinct notes + current note if present
-        2. maximize number of compatible major triads
+        2. maximize number of compatible chords
         3. prefer keeping current note if possible
         4. random tie-break
         """
@@ -213,14 +220,14 @@ class HarmonyAlgo:
 
         scored = []
         for scale in compatible_scales:
-            triads = self.get_valid_major_triads_for_scale(scale)
-            triad_count = len(triads)
+            chords = self.get_valid_chords_for_scale(scale)
+            chord_count = len(chords)
 
             keep_note_bonus = 0
             if current_note_mod is not None and current_note_mod in scale.notes:
                 keep_note_bonus = 1
 
-            scored.append((triad_count, keep_note_bonus, np.random.rand(), scale))
+            scored.append((chord_count, keep_note_bonus, np.random.rand(), scale))
 
         scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
         return scored[0][3]
@@ -249,7 +256,7 @@ class HarmonyAlgo:
             covered = sum(1 for n in self.last_distinct_notes if n in scale_notes)
             coverage_ratio = covered / max(1, len(self.last_distinct_notes))
 
-            triad_count = len(self.get_valid_major_triads_for_scale(scale))
+            chord_count = len(self.get_valid_chords_for_scale(scale))
 
             keep_note_bonus = 0.0
             if current_note_mod is not None and current_note_mod in scale_notes:
@@ -259,7 +266,7 @@ class HarmonyAlgo:
             if self.current_scale is not None and getattr(self.current_scale, "name", None) == getattr(scale, "name", None):
                 stability_bonus = 0.05
 
-            score = coverage_ratio + 0.02 * triad_count + keep_note_bonus + stability_bonus
+            score = coverage_ratio + 0.02 * chord_count + keep_note_bonus + stability_bonus
             scored.append((score, coverage_ratio, np.random.rand(), scale))
 
         scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
@@ -303,26 +310,26 @@ class HarmonyAlgo:
     # Chord generation / detection
     # ------------------------------------------------------------------
 
-    def get_valid_major_triads_for_scale(self, scale):
+    def get_valid_chords_for_scale(self, scale):
         """
-        Return all major triads fully contained in the given scale.
+        Return all allowed chords fully contained in the given scale.
         """
         scale_notes = set(scale.notes)
-        triads = []
+        chords = []
 
         for root in range(12):
-            chord = {
-                root % 12,
-                (root + self.MAJOR_TRIAD[1]) % 12,
-                (root + self.MAJOR_TRIAD[2]) % 12
-            }
-            if chord.issubset(scale_notes):
-                triads.append({
-                    "root": root % 12,
-                    "notes": chord
-                })
+            for chord_name, intervals in self.CHORD_PATTERNS.items():
+                chord_notes = {(root + interval) % 12 for interval in intervals}
 
-        return triads
+                if chord_notes.issubset(scale_notes):
+                    chords.append({
+                        "root": root % 12,
+                        "name": chord_name,
+                        "notes": chord_notes,
+                        "intervals": intervals
+                    })
+
+        return chords
 
     def group_events_by_beat(self, recent_events: list):
         grouped = {beat: [] for beat in range(self.nbr_beats)}
@@ -366,14 +373,14 @@ class HarmonyAlgo:
 
     def find_chord_candidates(self, recent_events: list, scale, current_beat: int):
         """
-        Build candidate triads from recent events.
+        Build candidate chords from recent events.
 
         Candidate score is stronger when:
-        - two distinct notes of a triad are heard on the same beat
+        - two distinct notes of a chord are heard on the same beat
         - current beat already matches
         - more neighbor notes support the chord
         """
-        triads = self.get_valid_major_triads_for_scale(scale)
+        chords = self.get_valid_chords_for_scale(scale)
         grouped = self.group_events_by_beat(recent_events)
 
         candidates = []
@@ -383,9 +390,9 @@ class HarmonyAlgo:
             notes_on_beat = {e["note"] for e in events}
             count_on_beat = len(events)
 
-            for triad in triads:
-                present = notes_on_beat.intersection(triad["notes"])
-                missing = triad["notes"] - notes_on_beat
+            for chord in chords:
+                present = notes_on_beat.intersection(chord["notes"])
+                missing = chord["notes"] - notes_on_beat
 
                 if len(present) == 0:
                     continue
@@ -406,8 +413,9 @@ class HarmonyAlgo:
                 score += 0.3 * count_on_beat
 
                 candidates.append({
-                    "triad_root": triad["root"],
-                    "triad_notes": triad["notes"],
+                    "chord_root": chord["root"],
+                    "chord_notes": chord["notes"],
+                    "chord_name": chord["name"],
                     "beat": beat,
                     "present": present,
                     "missing": missing,
@@ -419,9 +427,9 @@ class HarmonyAlgo:
         all_notes = {e["note"] for e in recent_events}
         beat_set = {e["beat"] for e in recent_events}
 
-        for triad in triads:
-            present = all_notes.intersection(triad["notes"])
-            missing = triad["notes"] - all_notes
+        for chord in chords:
+            present = all_notes.intersection(chord["notes"])
+            missing = chord["notes"] - all_notes
 
             if len(present) == 0:
                 continue
@@ -429,8 +437,9 @@ class HarmonyAlgo:
             # if already represented on same-beat candidates, keep cross-beat only as weaker alternative
             if len(present) >= 2 and len(beat_set) > 1:
                 candidates.append({
-                    "triad_root": triad["root"],
-                    "triad_notes": triad["notes"],
+                    "chord_root": chord["root"],
+                    "chord_notes": chord["notes"],
+                    "chord_name": chord["name"],
                     "beat": current_beat,
                     "present": present,
                     "missing": missing,
@@ -441,10 +450,10 @@ class HarmonyAlgo:
         if not candidates:
             return []
 
-        # keep best unique (triad, beat)
+        # keep best unique (chord, beat)
         unique = {}
         for c in candidates:
-            key = (tuple(sorted(c["triad_notes"])), c["beat"])
+            key = (tuple(sorted(c["chord_notes"])), c["beat"])
             if key not in unique or c["score"] > unique[key]["score"]:
                 unique[key] = c
 
@@ -464,7 +473,7 @@ class HarmonyAlgo:
         3. if chord already complete, do NOT double -> keep current if valid,
         else choose a note in scale (outside the chord if possible), otherwise None
         """
-        triad = candidate["triad_notes"]
+        chord = candidate["chord_notes"]
         missing = candidate["missing"]
         target_beat = candidate["beat"]
 
@@ -475,13 +484,13 @@ class HarmonyAlgo:
         # keep same note if possible
         if (
             current_note_mod is not None
-            and current_note_mod in triad
+            and current_note_mod in chord
             and current_note_mod in scale.notes
             and not self.is_note_beat_pair_forbidden(current_note_mod, target_beat, time_s)
         ):
             return current_note_mod
 
-        # best case: complete the triad
+        # best case: complete the chord
         if len(missing) == 1:
             note = list(missing)[0]
             if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
@@ -496,8 +505,8 @@ class HarmonyAlgo:
             ):
                 return current_note_mod
 
-            # choose another note from the same scale, preferably outside the triad
-            outside = [n for n in scale.notes if n not in triad]
+            # choose another note from the same scale, preferably outside the chord
+            outside = [n for n in scale.notes if n not in chord]
             for note in outside:
                 note = int(note) % 12
                 if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
@@ -866,6 +875,7 @@ class HarmonyAlgo:
             "scale": None,
             "chord_root": None,
             "chord_notes": None,
+            "chord_name": None,
             "beat": current_beat,
             "recent_neighbors": len(recent_events),
             "dominant_beat": self.last_uniform_neighbor_beat,
@@ -933,6 +943,7 @@ class HarmonyAlgo:
                     self.current_chord = None
                     self.current_chord_root = None
                     self.current_chord_beat = None
+                    self.current_chord_name = None
 
                     debug["reason"] = f"forbidden_pair_escape::{alt_reason}"
                     debug["beat"] = alt_beat
@@ -952,6 +963,7 @@ class HarmonyAlgo:
             self.current_chord = None
             self.current_chord_root = None
             self.current_chord_beat = None
+            self.current_chord_name = None
             debug["used_fallback"] = True
             debug["reason"] = "no_chord_candidate"
             return None, current_beat, debug
@@ -963,6 +975,7 @@ class HarmonyAlgo:
             self.current_chord = None
             self.current_chord_root = None
             self.current_chord_beat = None
+            self.current_chord_name = None
             debug["used_fallback"] = True
             debug["reason"] = "candidate_note_selection_failed"
             return None, current_beat, debug
@@ -984,8 +997,9 @@ class HarmonyAlgo:
             )
 
         # commit chord state
-        self.current_chord = set(best_candidate["triad_notes"])
-        self.current_chord_root = best_candidate["triad_root"]
+        self.current_chord = set(best_candidate["chord_notes"])
+        self.current_chord_root = best_candidate["chord_root"]
+        self.current_chord_name = best_candidate["chord_name"]
         self.current_chord_beat = chosen_beat
 
         note_event = (int(chosen_note), self.beat_duration_s, self.fallback_volume)
@@ -993,6 +1007,7 @@ class HarmonyAlgo:
         debug["reason"] = f"new_or_updated_chord::{beat_reason}"
         debug["chord_root"] = self.current_chord_root
         debug["chord_notes"] = sorted(list(self.current_chord))
+        debug["chord_name"] = self.current_chord_name
         debug["beat"] = chosen_beat
 
         return note_event, chosen_beat, debug
