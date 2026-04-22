@@ -46,10 +46,14 @@ class SwarmMusicFsm(Fsm):
         self.harmony_algo = HarmonyAlgo(
             nbr_beats=self.nbr_beats,
             beat_duration_s=self.beat_duration_s,
-            note_memory_ttl_s=5.0,
-            beat_memory_ttl_s=5.0,
+            note_memory_ttl_s=10.0,
+            beat_memory_ttl_s=10.0,
             same_captor_merge_ttl_s=1.0, # anti-duplication
-            fallback_volume=0.6
+            fallback_volume=0.6,
+            beat_change_eval_delay_s=3.0,   # délai avant comparaison avant/après
+            bad_beat_penalty_decay=0.995,   # oubli lent
+            dominant_beat_window_s=5.0,     # si un beat domine > 5s, fuite forte
+            forbidden_pair_ttl_s=10.0
         )
 
     def update_communication(self, dt_s, msgs):

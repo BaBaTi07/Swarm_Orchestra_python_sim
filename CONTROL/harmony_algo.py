@@ -35,6 +35,10 @@ class HarmonyAlgo:
         beat_memory_ttl_s: float = 5.0,
         same_captor_merge_ttl_s: float = 1.0,
         fallback_volume: float = 0.6,
+        beat_change_eval_delay_s: float = 2.0,
+        bad_beat_penalty_decay: float = 0.98,
+        dominant_beat_window_s: float = 10.0,
+        forbidden_pair_ttl_s: float = 10.0,
     ):
         self.nbr_beats = nbr_beats
         self.beat_duration_s = beat_duration_s
@@ -44,18 +48,44 @@ class HarmonyAlgo:
         self.same_captor_merge_ttl_s = same_captor_merge_ttl_s
         self.fallback_volume = fallback_volume
 
+        # new memory / adaptation params
+        self.beat_change_eval_delay_s = beat_change_eval_delay_s
+        self.bad_beat_penalty_decay = bad_beat_penalty_decay
+        self.dominant_beat_window_s = dominant_beat_window_s
+
         # memory of recent note messages
         # item = {"time_s", "captor_id", "note", "beat"}
         self.note_history = []
 
         # state of the current local harmonic commitment
         self.current_scale = None
-        self.current_chord = None       # set[int] or None
-        self.current_chord_root = None  # int or None
-        self.current_chord_beat = None  # int or None
+        self.current_chord = None
+        self.current_chord_root = None
+        self.current_chord_beat = None
 
         # used to increase exploration if local beat consensus stalls
         self.failed_beat_consensus_count = 0
+
+        # pending evaluation of last beat change
+        # {
+        #   "time_s": ...,
+        #   "old_beat": ...,
+        #   "new_beat": ...,
+        #   "balance_cost_before": ...
+        # }
+        self.pending_beat_evaluation = None
+
+        # learned local penalties on target beats
+        # beat -> float penalty
+        self.bad_beat_targets = {b: 0.0 for b in range(self.nbr_beats)}
+
+        # track prolonged local beat dominance
+        self.last_uniform_neighbor_beat = None
+        self.last_uniform_neighbor_beat_start_s = None
+
+        self.forbidden_pair_ttl_s = forbidden_pair_ttl_s
+        # key: (note_mod, beat) -> until_time_s
+        self.forbidden_note_beat_pairs = {}
 
     # ------------------------------------------------------------------
     # Parsing / memory
@@ -342,51 +372,177 @@ class HarmonyAlgo:
     # Note choice
     # ------------------------------------------------------------------
 
-    def choose_note_for_candidate(self, candidate, current_note_event, scale):
+    def choose_note_for_candidate(self, candidate, current_note_event, scale, time_s: float):
         """
         Priority:
-        1. keep current note if it is already in chord and scale
-        2. if exactly one note is missing, choose it
-        3. if chord already complete, do not double -> keep current if valid,
-           else choose a note in scale (outside the chord if possible), otherwise None
+        1. keep current note if it is already in chord and scale and pair is not forbidden
+        2. if exactly one note is missing, choose it if pair is not forbidden
+        3. if chord already complete, do NOT double -> keep current if valid,
+        else choose a note in scale (outside the chord if possible), otherwise None
         """
         triad = candidate["triad_notes"]
         missing = candidate["missing"]
+        target_beat = candidate["beat"]
 
         current_note_mod = None
         if current_note_event is not None:
             current_note_mod = int(current_note_event[0]) % 12
 
         # keep same note if possible
-        if current_note_mod is not None and current_note_mod in triad and current_note_mod in scale.notes:
+        if (
+            current_note_mod is not None
+            and current_note_mod in triad
+            and current_note_mod in scale.notes
+            and not self.is_note_beat_pair_forbidden(current_note_mod, target_beat, time_s)
+        ):
             return current_note_mod
 
         # best case: complete the triad
         if len(missing) == 1:
-            return list(missing)[0]
+            note = list(missing)[0]
+            if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
+                return note
 
         # if chord is already complete, do not double
         if len(missing) == 0:
-            if current_note_mod is not None and current_note_mod in scale.notes:
+            if (
+                current_note_mod is not None
+                and current_note_mod in scale.notes
+                and not self.is_note_beat_pair_forbidden(current_note_mod, target_beat, time_s)
+            ):
                 return current_note_mod
 
             # choose another note from the same scale, preferably outside the triad
             outside = [n for n in scale.notes if n not in triad]
-            if outside:
-                return int(np.random.choice(outside))
+            for note in outside:
+                note = int(note) % 12
+                if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
+                    return note
 
-            # otherwise impossible to avoid duplication cleanly
+            for note in scale.notes:
+                note = int(note) % 12
+                if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
+                    return note
+
             return None
 
-        # if two notes are missing, candidate is weak; let caller decide with probabilities
-        if current_note_mod is not None and current_note_mod in scale.notes:
+        # weak candidate: keep current note only if allowed
+        if (
+            current_note_mod is not None
+            and current_note_mod in scale.notes
+            and not self.is_note_beat_pair_forbidden(current_note_mod, target_beat, time_s)
+        ):
             return current_note_mod
+
+        # otherwise search another allowed scale note
+        for note in scale.notes:
+            note = int(note) % 12
+            if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
+                return note
 
         return None
 
     # ------------------------------------------------------------------
+    # forbiden pairs management
+    # ------------------------------------------------------------------
+
+    def cleanup_forbidden_pairs(self, time_s: float):
+        expired = [
+            pair for pair, until in self.forbidden_note_beat_pairs.items()
+            if until <= time_s
+        ]
+        for pair in expired:
+            del self.forbidden_note_beat_pairs[pair]
+
+    def ban_note_beat_pair(self, note: int, beat: int, time_s: float):
+        self.forbidden_note_beat_pairs[(note % 12, beat)] = time_s + self.forbidden_pair_ttl_s
+
+    def is_note_beat_pair_forbidden(self, note: int, beat: int, time_s: float) -> bool:
+        until = self.forbidden_note_beat_pairs.get((note % 12, beat), 0.0)
+        return until > time_s
+    
+    def detect_same_note_same_beat_collision(self, recent_events: list, current_note_event, current_beat: int):
+        if current_note_event is None:
+            return False
+
+        current_note = int(current_note_event[0]) % 12
+
+        for e in recent_events:
+            if e["note"] == current_note and e["beat"] == current_beat:
+                return True
+
+        return False
+    def choose_forbidden_pair_alternative(self, scale, current_note_event, current_beat: int, beat_events: list, time_s: float):
+        """
+        When (current_note, current_beat) becomes forbidden because a neighbor plays
+        the exact same note on the exact same beat, choose an alternative:
+        - prefer changing beat first
+        - then prefer keeping note if possible
+        - otherwise choose another note in same scale
+        - avoid forbidden (note, beat) pairs
+        """
+        if scale is None:
+            return None, current_beat, "no_scale_for_forbidden_pair"
+
+        beat_usage = self.compute_local_beat_usage(beat_events)
+
+        current_note = None
+        if current_note_event is not None:
+            current_note = int(current_note_event[0]) % 12
+
+        # 1) prefer another beat with same note
+        if current_note is not None:
+            candidate_beats = [b for b in range(self.nbr_beats) if b != current_beat]
+            candidate_beats.sort(key=lambda b: beat_usage.get(b, 0))
+
+            for beat in candidate_beats:
+                if not self.is_note_beat_pair_forbidden(current_note, beat, time_s):
+                    return (current_note, self.beat_duration_s, self.fallback_volume), beat, "change_beat_keep_note"
+
+        # 2) otherwise keep beat and change note within scale
+        if current_note is not None:
+            for note in scale.notes:
+                note = int(note) % 12
+                if note == current_note:
+                    continue
+                if not self.is_note_beat_pair_forbidden(note, current_beat, time_s):
+                    return (note, self.beat_duration_s, self.fallback_volume), current_beat, "keep_beat_change_note"
+
+        # 3) otherwise change both note and beat
+        candidate_beats = list(range(self.nbr_beats))
+        candidate_beats.sort(key=lambda b: beat_usage.get(b, 0))
+
+        for beat in candidate_beats:
+            for note in scale.notes:
+                note = int(note) % 12
+                if not self.is_note_beat_pair_forbidden(note, beat, time_s):
+                    return (note, self.beat_duration_s, self.fallback_volume), beat, "change_note_and_beat"
+
+        return None, current_beat, "no_alternative_forbidden_pair"
+    # ------------------------------------------------------------------
     # Beat choice
     # ------------------------------------------------------------------
+
+    def beat_balance_cost(self, beat_usage: dict) -> float:
+        """
+        Cost of local beat imbalance.
+        0 = perfectly balanced
+        higher = more unbalanced
+        """
+        counts = np.array([beat_usage[b] for b in range(self.nbr_beats)], dtype=float)
+        total = np.sum(counts)
+        if total <= 0:
+            return 0.0
+
+        p = counts / total
+        ideal = np.ones(self.nbr_beats, dtype=float) / self.nbr_beats
+        return float(np.sum((p - ideal) ** 2))
+
+    def decay_bad_beat_penalties(self):
+        for b in range(self.nbr_beats):
+            self.bad_beat_targets[b] *= self.bad_beat_penalty_decay
+            if self.bad_beat_targets[b] < 1e-3:
+                self.bad_beat_targets[b] = 0.0
 
     def compute_local_beat_usage(self, beat_events: list):
         """
@@ -396,6 +552,77 @@ class HarmonyAlgo:
         for e in beat_events:
             usage[e["beat"]] += 1
         return usage
+    
+    def start_beat_change_evaluation(self, old_beat: int, new_beat: int, beat_events: list, time_s: float):
+        if old_beat == new_beat:
+            return
+
+        beat_usage = self.compute_local_beat_usage(beat_events)
+        balance_cost_before = self.beat_balance_cost(beat_usage)
+
+        self.pending_beat_evaluation = {
+            "time_s": time_s,
+            "old_beat": old_beat,
+            "new_beat": new_beat,
+            "balance_cost_before": balance_cost_before
+        }
+
+    def update_pending_beat_evaluation(self, beat_events: list, time_s: float):
+        if self.pending_beat_evaluation is None:
+            return
+
+        age = time_s - self.pending_beat_evaluation["time_s"]
+        if age < self.beat_change_eval_delay_s:
+            return
+
+        beat_usage_after = self.compute_local_beat_usage(beat_events)
+        balance_cost_after = self.beat_balance_cost(beat_usage_after)
+        balance_cost_before = self.pending_beat_evaluation["balance_cost_before"]
+        new_beat = self.pending_beat_evaluation["new_beat"]
+
+        # if local balance got worse, penalize that target beat
+        if balance_cost_after > balance_cost_before + 1e-9:
+            delta = balance_cost_after - balance_cost_before
+            self.bad_beat_targets[new_beat] += 1.0 + 5.0 * delta
+            logger.log(
+                "DEBUG",
+                f"HarmonyAlgo learned bad beat target: beat={new_beat}, "
+                f"before={balance_cost_before:.4f}, after={balance_cost_after:.4f}, "
+                f"penalty={self.bad_beat_targets[new_beat]:.3f}"
+            )
+        else:
+            # if change improved or preserved balance, slightly forgive that beat
+            self.bad_beat_targets[new_beat] *= 0.8
+
+        self.pending_beat_evaluation = None
+
+    def update_dominant_beat_tracking(self, beat_events: list, time_s: float):
+        """
+        Track if all recent neighbor beat events are concentrated on one single beat.
+        """
+        if not beat_events:
+            self.last_uniform_neighbor_beat = None
+            self.last_uniform_neighbor_beat_start_s = None
+            return
+
+        used_beats = {e["beat"] for e in beat_events}
+
+        if len(used_beats) == 1:
+            only_beat = next(iter(used_beats))
+            if self.last_uniform_neighbor_beat == only_beat:
+                if self.last_uniform_neighbor_beat_start_s is None:
+                    self.last_uniform_neighbor_beat_start_s = time_s
+            else:
+                self.last_uniform_neighbor_beat = only_beat
+                self.last_uniform_neighbor_beat_start_s = time_s
+        else:
+            self.last_uniform_neighbor_beat = None
+            self.last_uniform_neighbor_beat_start_s = None
+    
+    def get_dominant_beat_duration(self, time_s: float) -> float:
+        if self.last_uniform_neighbor_beat is None or self.last_uniform_neighbor_beat_start_s is None:
+            return 0.0
+        return max(0.0, time_s - self.last_uniform_neighbor_beat_start_s)
 
     def choose_best_unoccupied_beat(self, beat_usage: dict, forbidden_beats: set | None = None):
         if forbidden_beats is None:
@@ -409,15 +636,13 @@ class HarmonyAlgo:
         best = [b for b in candidates if beat_usage[b] == min_use]
         return int(np.random.choice(best))
 
-    def choose_beat_for_candidate(self, candidate, current_beat: int, beat_events: list):
+    def choose_beat_for_candidate(self, candidate, current_beat: int, beat_events: list, time_s: float):
         """
-        Beat decision according to user's rules:
-
-        - avoid changing beat first
-        - if same-beat support is strong, strong probability to join that beat
-        - if support is weaker/cross-beat, lower probability
-        - if local beat usage suggests target beat is crowded, probability drops
-        - if repeated failed local convergence, exploration toward a less used beat increases
+        Beat decision with:
+        - local harmonic evidence
+        - local saturation penalty
+        - learned penalty from past bad beat changes
+        - strong escape when one beat dominates too long
         """
         target_beat = candidate["beat"]
         same_beat_support = candidate["same_beat_support"]
@@ -427,43 +652,85 @@ class HarmonyAlgo:
         current_usage = beat_usage.get(current_beat, 0)
         target_usage = beat_usage.get(target_beat, 0)
 
-        # 1) avoid changing if possible
+        total_local = sum(beat_usage.values())
+        ideal_usage = max(1, int(np.ceil(total_local / self.nbr_beats))) if total_local > 0 else 1
+
+        dominant_duration = self.get_dominant_beat_duration(time_s)
+        dominant_beat = self.last_uniform_neighbor_beat
+
+        # 1) if candidate already matches current beat, keep it
         if target_beat == current_beat:
             self.failed_beat_consensus_count = 0
             return current_beat, "keep_current_beat"
 
-        # 2) base probability depending on harmonic evidence
+        # 2) base probability from harmonic evidence
         if same_beat_support and present_count >= 2:
-            p_change = 0.85
+            p_change = 0.75
         elif present_count >= 2:
-            p_change = 0.45
+            p_change = 0.30
         elif present_count == 1:
-            p_change = 0.20
+            p_change = 0.10
         else:
-            p_change = 0.05
+            p_change = 0.02
 
-        # 3) crowded target beat => less attractive
+        # 3) strong penalty if target beat is already more crowded
         if target_usage > current_usage:
-            p_change *= 0.45
-        elif target_usage < current_usage:
-            p_change *= 1.15
+            diff = target_usage - current_usage
+            p_change *= (0.35 ** diff)
 
-        # 4) after repeated failed consensus, increase exploration toward least used beat
-        exploration_bonus = min(0.35, 0.08 * self.failed_beat_consensus_count)
+        # 4) strong penalty if target beat exceeds ideal local occupancy
+        if target_usage > ideal_usage:
+            overflow = target_usage - ideal_usage
+            p_change *= (0.25 ** overflow)
+
+        # 5) near-block if target beat is dominant locally
+        max_usage = max(beat_usage.values()) if beat_usage else 0
+        if target_usage == max_usage and target_usage >= ideal_usage + 1:
+            p_change *= 0.10
+
+        # 6) if chord already sufficiently represented on target beat, don't reinforce it much more
+        if same_beat_support and present_count >= 2 and target_usage >= 2:
+            p_change *= 0.20
+
+        # 7) learned historical penalty on bad target beats
+        learned_penalty = self.bad_beat_targets.get(target_beat, 0.0)
+        p_change *= 1.0 / (1.0 + learned_penalty)
+
+        # 8) if current beat is relatively underused, favor staying
+        if current_usage < ideal_usage:
+            p_change *= 0.70
+
+        # 9) prolonged uniform dominance: strong pressure to escape
+        # If all neighbors have used the same beat for too long,
+        # do not keep feeding that beat; strongly prefer an alternative underused beat.
+        if dominant_beat is not None and dominant_duration >= self.dominant_beat_window_s:
+            if target_beat == dominant_beat:
+                p_change *= 0.05  # almost refuse joining the dominant beat
+
+            alternative_beats = [b for b in range(self.nbr_beats) if b != dominant_beat]
+            if alternative_beats:
+                min_use = min(beat_usage[b] for b in alternative_beats)
+                best_alts = [b for b in alternative_beats if beat_usage[b] == min_use]
+                forced_escape_beat = int(np.random.choice(best_alts))
+
+                p_escape = min(0.90, 0.35 + 0.05 * (dominant_duration - self.dominant_beat_window_s))
+                if np.random.rand() < p_escape:
+                    self.failed_beat_consensus_count = 0
+                    return forced_escape_beat, "escape_dominant_beat"
+
+        # 10) exploration toward unused beat if local consensus stalls
+        exploration_bonus = min(0.50, 0.10 * self.failed_beat_consensus_count)
         unused_beats = {b for b, u in beat_usage.items() if u == 0}
 
-        # if both robots/notes don't converge after several interactions,
-        # bias toward a beat not used locally
-        exploratory_beat = None
         if self.failed_beat_consensus_count >= 3 and unused_beats:
             exploratory_beat = self.choose_best_unoccupied_beat(beat_usage)
             if exploratory_beat is not None:
-                p_explore = min(0.60, 0.20 + exploration_bonus)
+                p_explore = min(0.70, 0.25 + exploration_bonus)
                 if np.random.rand() < p_explore:
                     self.failed_beat_consensus_count = 0
                     return exploratory_beat, "explore_unused_beat"
 
-        # 5) normal target selection
+        # 11) final probabilistic decision
         if np.random.rand() < p_change:
             self.failed_beat_consensus_count = 0
             return target_beat, "change_to_candidate_beat"
@@ -486,6 +753,12 @@ class HarmonyAlgo:
 
         recent_events = self.get_recent_note_events(time_s)
         beat_events = self.get_recent_beat_events(time_s)
+        self.cleanup_forbidden_pairs(time_s)
+
+        # new adaptive memory updates
+        self.decay_bad_beat_penalties()
+        self.update_pending_beat_evaluation(beat_events, time_s)
+        self.update_dominant_beat_tracking(beat_events, time_s)
 
         debug = {
             "used_fallback": False,
@@ -495,6 +768,9 @@ class HarmonyAlgo:
             "chord_notes": None,
             "beat": current_beat,
             "recent_neighbors": len(recent_events),
+            "dominant_beat": self.last_uniform_neighbor_beat,
+            "dominant_duration": self.get_dominant_beat_duration(time_s),
+            "bad_beat_targets": dict(self.bad_beat_targets),
         }
 
         # no recent neighbors -> keep current state, no aggressive recalculation
@@ -506,6 +782,44 @@ class HarmonyAlgo:
         scale = self.infer_local_scale(recent_events, current_note_event)
         self.current_scale = scale
         debug["scale"] = getattr(scale, "name", None)
+
+        # hard collision rule: same note + same beat as a neighbor -> ban this pair temporarily
+        if self.detect_same_note_same_beat_collision(recent_events, current_note_event, current_beat):
+            current_note_mod = int(current_note_event[0]) % 12 if current_note_event is not None else None
+
+            if current_note_mod is not None:
+                self.ban_note_beat_pair(current_note_mod, current_beat, time_s)
+                logger.log(
+                    "DEBUG",
+                    f"HarmonyAlgo banned pair due to collision: note={current_note_mod}, beat={current_beat}"
+                )
+
+                alt_note_event, alt_beat, alt_reason = self.choose_forbidden_pair_alternative(
+                    scale=scale,
+                    current_note_event=current_note_event,
+                    current_beat=current_beat,
+                    beat_events=beat_events,
+                    time_s=time_s
+                )
+
+                if alt_note_event is not None:
+                    # also evaluate beat change if any
+                    if alt_beat != current_beat:
+                        self.start_beat_change_evaluation(
+                            old_beat=current_beat,
+                            new_beat=alt_beat,
+                            beat_events=beat_events,
+                            time_s=time_s
+                        )
+
+                    # reset current chord because exact duplication broke local usefulness
+                    self.current_chord = None
+                    self.current_chord_root = None
+                    self.current_chord_beat = None
+
+                    debug["reason"] = f"forbidden_pair_escape::{alt_reason}"
+                    debug["beat"] = alt_beat
+                    return alt_note_event, alt_beat, debug
 
         # maintain current chord if still valid
         if self.is_current_chord_still_valid(recent_events, current_note_event, scale):
@@ -526,7 +840,7 @@ class HarmonyAlgo:
             return None, current_beat, debug
 
         best_candidate = candidates[0]
-        chosen_note = self.choose_note_for_candidate(best_candidate, current_note_event, scale)
+        chosen_note = self.choose_note_for_candidate(best_candidate, current_note_event, scale, time_s)
 
         if chosen_note is None:
             self.current_chord = None
@@ -539,8 +853,18 @@ class HarmonyAlgo:
         chosen_beat, beat_reason = self.choose_beat_for_candidate(
             best_candidate,
             current_beat,
-            beat_events
+            beat_events,
+            time_s
         )
+
+        # start before/after evaluation only if beat really changed
+        if chosen_beat != current_beat:
+            self.start_beat_change_evaluation(
+                old_beat=current_beat,
+                new_beat=chosen_beat,
+                beat_events=beat_events,
+                time_s=time_s
+            )
 
         # commit chord state
         self.current_chord = set(best_candidate["triad_notes"])
