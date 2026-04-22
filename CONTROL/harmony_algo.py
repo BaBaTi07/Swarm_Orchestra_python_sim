@@ -57,6 +57,16 @@ class HarmonyAlgo:
         # item = {"time_s", "captor_id", "note", "beat"}
         self.note_history = []
 
+        self.last_distinct_notes = []
+        self.last_distinct_notes_max_len = 5
+
+        #from the last distinct notes, if a scale covers >95% of them,
+        #consider it as stable and start playing chords from that scale.
+        self.scale_confidence_threshold = 0.95 
+        self.scale_stability_count = 0
+        self.last_scale_name = None
+        self.min_stable_scale_updates = 2
+
         # state of the current local harmonic commitment
         self.current_scale = None
         self.current_chord = None
@@ -214,7 +224,81 @@ class HarmonyAlgo:
 
         scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
         return scored[0][3]
+    
+    def infer_local_scale_with_confidence(self, current_note_event):
+        """
+        Infer a dominant local scale from the last distinct heard notes.
+        Returns:
+            chosen_scale, confidence in [0,1]
+        """
+        notes = set(self.last_distinct_notes)
 
+        current_note_mod = None
+        if current_note_event is not None:
+            current_note_mod = int(current_note_event[0]) % 12
+            notes.add(current_note_mod)
+
+        if not notes:
+            chosen = np.random.choice(Scales)
+            return chosen, 0.0
+
+        scored = []
+        for scale in Scales:
+            scale_notes = set(scale.notes)
+
+            covered = sum(1 for n in self.last_distinct_notes if n in scale_notes)
+            coverage_ratio = covered / max(1, len(self.last_distinct_notes))
+
+            triad_count = len(self.get_valid_major_triads_for_scale(scale))
+
+            keep_note_bonus = 0.0
+            if current_note_mod is not None and current_note_mod in scale_notes:
+                keep_note_bonus = 0.05
+
+            stability_bonus = 0.0
+            if self.current_scale is not None and getattr(self.current_scale, "name", None) == getattr(scale, "name", None):
+                stability_bonus = 0.05
+
+            score = coverage_ratio + 0.02 * triad_count + keep_note_bonus + stability_bonus
+            scored.append((score, coverage_ratio, np.random.rand(), scale))
+
+        scored.sort(key=lambda x: (x[0], x[1], x[2]), reverse=True)
+        best_score, best_coverage_ratio, _, best_scale = scored[0]
+
+        confidence = best_coverage_ratio
+        return best_scale, confidence
+    
+    def update_scale_stability(self, chosen_scale):
+        scale_name = getattr(chosen_scale, "name", None)
+
+        if self.last_scale_name == scale_name:
+            self.scale_stability_count += 1
+        else:
+            self.last_scale_name = scale_name
+            self.scale_stability_count = 1
+
+    def is_scale_stable_enough(self, confidence: float) -> bool:
+        return (
+            confidence >= self.scale_confidence_threshold
+            and self.scale_stability_count >= self.min_stable_scale_updates
+        )
+    
+    def choose_note_from_scale_only(self, scale, current_note_event):
+        """
+        Pre-harmonic mode:
+        choose a note in the dominant inferred scale,
+        prefer keeping current note if already valid.
+        """
+        if scale is None:
+            return None
+
+        if current_note_event is not None:
+            current_note = int(current_note_event[0]) % 12
+            if current_note in scale.notes:
+                return (current_note, self.beat_duration_s, self.fallback_volume)
+
+        note = int(np.random.choice(scale.notes)) % 12
+        return (note, self.beat_duration_s, self.fallback_volume)
     # ------------------------------------------------------------------
     # Chord generation / detection
     # ------------------------------------------------------------------
@@ -441,6 +525,21 @@ class HarmonyAlgo:
                 return note
 
         return None
+    
+    def update_distinct_note_history(self, recent_events: list):
+        """
+        Keep a short ordered memory of last distinct heard notes (mod 12),
+        similar to the previous scale-convergence logic.
+        """
+        for e in recent_events:
+            note = int(e["note"]) % 12
+            if not self.last_distinct_notes or self.last_distinct_notes[-1] != note:
+                if note in self.last_distinct_notes:
+                    self.last_distinct_notes.remove(note)
+                self.last_distinct_notes.append(note)
+
+                if len(self.last_distinct_notes) > self.last_distinct_notes_max_len:
+                    self.last_distinct_notes.pop(0)
 
     # ------------------------------------------------------------------
     # forbiden pairs management
@@ -754,6 +853,7 @@ class HarmonyAlgo:
         recent_events = self.get_recent_note_events(time_s)
         beat_events = self.get_recent_beat_events(time_s)
         self.cleanup_forbidden_pairs(time_s)
+        self.update_distinct_note_history(recent_events)
 
         # new adaptive memory updates
         self.decay_bad_beat_penalties()
@@ -779,10 +879,27 @@ class HarmonyAlgo:
             return current_note_event, current_beat, debug
 
         # infer local scale
-        scale = self.infer_local_scale(recent_events, current_note_event)
+        scale, scale_confidence = self.infer_local_scale_with_confidence(current_note_event)
         self.current_scale = scale
-        debug["scale"] = getattr(scale, "name", None)
+        self.update_scale_stability(scale)
 
+        debug["scale"] = getattr(scale, "name", None)
+        debug["scale_confidence"] = scale_confidence
+        debug["scale_stability_count"] = self.scale_stability_count
+
+        if not self.is_scale_stable_enough(scale_confidence):
+            tonal_note_event = self.choose_note_from_scale_only(scale, current_note_event)
+
+            debug["reason"] = "scale_alignment_only"
+            debug["used_fallback"] = False
+
+            if tonal_note_event is not None:
+                return tonal_note_event, current_beat, debug
+
+            debug["used_fallback"] = True
+            debug["reason"] = "scale_alignment_failed"
+            return None, current_beat, debug
+        
         # hard collision rule: same note + same beat as a neighbor -> ban this pair temporarily
         if self.detect_same_note_same_beat_collision(recent_events, current_note_event, current_beat):
             current_note_mod = int(current_note_event[0]) % 12 if current_note_event is not None else None
