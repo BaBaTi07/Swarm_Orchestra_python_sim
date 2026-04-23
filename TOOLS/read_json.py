@@ -8,7 +8,7 @@ from WORLD.epuck import *
 from WORLD.musicbot import *
 from WORLD.shapes import *
 from TOOLS.logger import logger
-
+from TOOLS.random_position import *
 
 
 def read_json_file(file_name: str):
@@ -123,44 +123,82 @@ def read_json_file(file_name: str):
 
     def handle_robot(section_label: str, robot_class):
         """
-        Returns a handler function for robot
-        sections (e_pucks, music_bots, etc.)
+        Returns a handler function for robot sections
+        (e_pucks, music_bots, etc.)
         """
-        known_keys = {"[x,y,z,rx,ry,rz,colour]"}
-        
+        known_keys = {"[x,y,z,rx,ry,rz,colour]", "rnd_pos"}
+
         def handler(section: dict):
+            rnd_pos = bool(section.get("rnd_pos", False))
+            robot_radius = get_robot_radius(robot_class)
+
             for k, v in section.items():
+                if k == "rnd_pos":
+                    continue
+
                 if k == "[x,y,z,rx,ry,rz,colour]":
 
                     if v is None or len(v) == 0:
                         logger.log("INFO", f"{section_label} list is empty.")
                         return
-                    
-                    arr = np.array(v, dtype=float)
-                    for rid in range(len(arr)):
-                        row = arr[rid]
+
+                    for rid, row in enumerate(v):
                         if len(row) < 9:
                             logger.log("WARN", f"{section_label} entry #{rid} has invalid length {len(row)} (expected 9). Ignored.")
                             continue
+
+                        try:
+                            pos = np.array(row[0:3], dtype=float)
+                            rot = np.array(row[3:6], dtype=float)
+                            colour = np.array(row[6:9], dtype=float)
+                        except ValueError:
+                            logger.log("WARN", f"{section_label} entry #{rid} contains non-numeric values. Ignored.")
+                            continue
+
+                        if rnd_pos:
+                            pos, rot = jitter_robot_pose(
+                                base_pos=pos,
+                                base_rot=rot,
+                                robot_radius=robot_radius,
+                                pos_jitter=0.3,
+                                rz_jitter=3.14,
+                            )
+                        else:
+                            if not is_valid_robot_position(pos[0], pos[1], robot_radius):
+                                logger.log("WARN", f"{section_label} entry #{rid} has invalid position ({pos[0]}, {pos[1]}). Ignored.")
+                                continue
 
                         global_robot_id = len(Arena.robot)
 
                         if section_label == "music_bots":
                             Arena.robot = np.append(
                                 Arena.robot,
-                                robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2), midi_recorder=Exp.midi)  # Pass the global MIDI recorder to the robot
+                                robot_class(
+                                    global_robot_id,
+                                    pos,
+                                    rot,
+                                    colour,
+                                    np.zeros(2),
+                                    midi_recorder=Exp.midi
+                                )
                             )
+
                         elif section_label == "e_pucks":
                             Arena.robot = np.append(
                                 Arena.robot,
-                                robot_class(global_robot_id, row[0:3], row[3:6], row[6:9], np.zeros(2)) # Epuck does not use MIDI recorder
+                                robot_class(
+                                    global_robot_id,
+                                    pos,
+                                    rot,
+                                    colour,
+                                    np.zeros(2)
+                                )
                             )
-                            
+
                 else:
                     logger.log("WARN", f"Unknown key in '{section_label}': '{k}' (ignored). Expected keys: {sorted(known_keys)}")
-        
-        #handler function is returned by handle_robot and added to handlers dict
-        return handler 
+
+        return handler
        
     handlers = {
         "comment": handle_comment,
