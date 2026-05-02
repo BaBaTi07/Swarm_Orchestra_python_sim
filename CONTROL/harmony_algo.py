@@ -1,6 +1,6 @@
 import numpy as np
 from TOOLS.logger import logger
-from TOOLS.scales import Scales
+from TOOLS.scales import Scales, CHORD_PATTERNS
 
 
 class HarmonyAlgo:
@@ -24,13 +24,6 @@ class HarmonyAlgo:
     - chosen beat
     - debug info dict
     """
-
-    CHORD_PATTERNS = {
-        "major": (0, 4, 7),
-        "minor": (0, 3, 7),
-        "sus2":  (0, 2, 7),
-        "sus4":  (0, 5, 7)
-    }
 
     def __init__(
         self,
@@ -318,7 +311,7 @@ class HarmonyAlgo:
         chords = []
 
         for root in range(12):
-            for chord_name, intervals in self.CHORD_PATTERNS.items():
+            for chord_name, intervals in CHORD_PATTERNS.items():
                 chord_notes = {(root + interval) % 12 for interval in intervals}
 
                 if chord_notes.issubset(scale_notes):

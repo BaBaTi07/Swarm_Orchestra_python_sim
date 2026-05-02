@@ -23,3 +23,11 @@ MajorScales = [
 MinorScales = []
 
 Scales = MajorScales + MinorScales
+
+
+CHORD_PATTERNS = {
+    "major": (0, 4, 7),
+    "minor": (0, 3, 7),
+    "sus2":  (0, 2, 7),
+    "sus4":  (0, 5, 7),
+}
