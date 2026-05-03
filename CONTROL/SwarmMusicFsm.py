@@ -34,6 +34,8 @@ class SwarmMusicFsm(Fsm):
 
         self.note_or_clock = False # if true, send note, if false send clock  
 
+        self.octave_shift = 0
+
         self.sync_algo = SyncAlgo(
             algo_type="memory",  #"kuramoto_basic", "kuramoto_confidence", "kuramoto_local_error", "memory"
             cycle_time_s=self.cicle_time_s,
@@ -101,7 +103,7 @@ class SwarmMusicFsm(Fsm):
     
     def generate_random_note_event(self):
         """(midi, duration_s, volume)"""
-        return (int(12*np.random.rand()), self.beat_duration_s, 0.6)
+        return (int(24*np.random.rand()), self.beat_duration_s, 0.6)
 
     def choose_beat_to_play(self, neighbor_beats):
         """chose the beat to play based on the beat recived from neighbors,
@@ -127,7 +129,7 @@ class SwarmMusicFsm(Fsm):
         
         # extract notes from messages and keep only the last three different ones
         for msg in msgs:
-            note = (msg.payload - 128)%12  # convert back to note value
+            note = (msg.payload - 128)%24  # convert back to note value
             if note not in self.last_received_notes: #new note
                 self.last_received_notes.append(note)
 
@@ -163,10 +165,16 @@ class SwarmMusicFsm(Fsm):
     def generate_ir_message(self, note=None, beat=None):
         """return internal clock (7 bits)msb = 0 or note (7 bits) msb = 1"""
         if note is not None:
-            value = (beat * 12) + note 
+            value = (beat * 24) + note 
             return value  + 128
         else:
             return self.sync_algo.theta_to_payload()
+        
+    def selectRandomOctave(self):
+        """Add a random octave shift of 0, or +1 to the note for more diversity."""
+        self.octave_shift = np.random.choice([0, 1])  # no shift, or +1 octave
+        return self.octave_shift
+
   
     def update(self, ir_readings: NDArray[np.float64], msgs: list, time_s: float, dt_s: float):
 
@@ -188,7 +196,7 @@ class SwarmMusicFsm(Fsm):
         for msg in msgs:
             if msg.payload >= 128:  # note message
                 note_msg.append(msg)
-                beat = (msg.payload - 128)//12
+                beat = (msg.payload - 128)//24
                 neighbor_beats_played.append(beat)
 
             else:  # synchronization message
@@ -206,6 +214,7 @@ class SwarmMusicFsm(Fsm):
 
         if note_to_play is None and self.last_played_note is None:
             note_to_play = self.generate_random_note_event()
+            self.last_played_note = note_to_play
             chosen_beat = self.beat_to_play
 
         if harmony_debug["used_fallback"]:
@@ -219,6 +228,12 @@ class SwarmMusicFsm(Fsm):
                 f"chord={harmony_debug['chord_notes']}, beat={harmony_debug['beat']}, "
                 f"reason={harmony_debug['reason']}"
             )
+        
+        # random octave variation for more diversity
+        if self.last_played_note is not None and note_to_play[0]%12 != self.last_played_note[0]%12:
+            self.octave_shift = self.selectRandomOctave()
+        
+        note_to_play = note_to_play[0] + self.octave_shift*12, note_to_play[1], note_to_play[2] 
 
         self.beat_to_play = chosen_beat
         self.last_played_note = note_to_play

@@ -105,7 +105,7 @@ class HarmonyAlgo:
         """
         Decode note messages into local events.
         Payload encoding:
-            payload = 128 + (beat * 12 + note)
+            payload = 128 + (beat * 24 + note)
         """
         parsed = []
         for msg in note_msgs:
@@ -113,8 +113,10 @@ class HarmonyAlgo:
             if raw < 0:
                 continue
 
-            beat = raw // 12
-            note = raw % 12
+            beat = raw // 24
+            note = raw % 24
+            pitch = note % 12
+            octave = note // 12
 
             if beat < 0 or beat >= self.nbr_beats:
                 continue
@@ -122,8 +124,9 @@ class HarmonyAlgo:
             parsed.append({
                 "time_s": time_s,
                 "captor_id": getattr(msg, "captor_id", None),
-                "note": note,
-                "beat": beat
+                "note": pitch,
+                "beat": beat,
+                "octave": octave
             })
         return parsed
 
@@ -143,7 +146,7 @@ class HarmonyAlgo:
                 if (event["time_s"] - old["time_s"]) > self.same_captor_merge_ttl_s:
                     break
 
-                if old["note"] == event["note"] and old["beat"] == event["beat"]:
+                if old["note"] == event["note"] and old["beat"] == event["beat"] and old["octave"] == event["octave"]:
                     duplicate = True
                     break
 
@@ -573,6 +576,7 @@ class HarmonyAlgo:
                 return True
 
         return False
+    
     def choose_forbidden_pair_alternative(self, scale, current_note_event, current_beat: int, beat_events: list, time_s: float):
         """
         When (current_note, current_beat) becomes forbidden because a neighbor plays

@@ -190,7 +190,7 @@ class Exp( ):
             kuramoto_conf_mean = np.mean([Exp.my_controller[rb.id].sync_algo.kuramoto_conf for rb in Arena.robot if hasattr(Exp.my_controller[rb.id], "sync_algo") and hasattr(Exp.my_controller[rb.id].sync_algo, "kuramoto_conf")])
             if sync is not None:
                 Exp.current_phase_sync_history.append((now_s, sync, kuramoto_conf_min, kuramoto_conf_mean, kuramoto_conf_max))
-                logger.log("TIME", f"sync={sync:.3f}, Kuramoto confidence (min/mean/max)={kuramoto_conf_min:.3f}/{kuramoto_conf_mean:.3f}/{kuramoto_conf_max:.3f}")
+                logger.log("TIME", f"sync={sync:.3f}")
 
         Exp.ir_medium.step(Arena.robot, time_s=now_s, dt_s=dt_s)
 
@@ -218,7 +218,7 @@ class Exp( ):
             # Play music event if any
             if music_event is not None and Exp.has_music[rb.id]:
                 logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
-                rb.play_note((music_event[0]%12)+60, music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
+                rb.play_note((music_event[0]%24)+54, music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
                 Exp.current_notes_history.append((now_s, music_event[0]))
                 if Exp.my_controller[rb.id].beat_to_play is not None:
                     Exp.current_beat_played_history.append((now_s, Exp.my_controller[rb.id].beat_to_play))
