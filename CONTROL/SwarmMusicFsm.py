@@ -5,6 +5,7 @@ from TOOLS.logger import logger
 from TOOLS.scales import Scales
 from CONTROL.sync_algo import SyncAlgo
 from CONTROL.harmony_algo import HarmonyAlgo
+from CONTROL.RythmAlgo import RhythmAlgo
 
 class SwarmMusicFsm(Fsm):
 
@@ -56,6 +57,13 @@ class SwarmMusicFsm(Fsm):
             bad_beat_penalty_decay=0.995,   # oubli lent
             dominant_beat_window_s=5.0,     # si un beat domine > 5s, fuite forte
             forbidden_pair_ttl_s=10.0
+        )
+
+        self.rhythm_algo = RhythmAlgo(
+            nbr_beats=self.nbr_beats,
+            beat_duration_s=self.beat_duration_s,
+            min_duration_factor=0.25,
+            max_duration_factor=2.0,
         )
 
     def update_communication(self, dt_s, msgs):
@@ -238,8 +246,18 @@ class SwarmMusicFsm(Fsm):
         self.beat_to_play = chosen_beat
         self.last_played_note = note_to_play
 
+        # compute note duration based on harmony role
+        duration, beat_mults, volume, rhythm_debug = self.rhythm_algo.compute_note_duration(harmony_debug)
+        note_to_play = (note_to_play[0], duration, volume)
+
         #déclanchement de la note au bon moment
-        if self.sync_algo.internal_clock < (dt_s + self.beat_duration_s * self.beat_to_play) and self.sync_algo.internal_clock + dt_s >= (self.beat_duration_s * self.beat_to_play): 
+        note_start = False
+        for beat_mult in beat_mults:
+            if self.sync_algo.internal_clock < (dt_s + self.beat_duration_s * (self.beat_to_play + beat_mult)) and self.sync_algo.internal_clock + dt_s >= (self.beat_duration_s * (self.beat_to_play + beat_mult)):
+                note_start = True
+                break
+
+        if note_start and note_to_play is not None:
             note_event = note_to_play
             
         #send a message if someting around    

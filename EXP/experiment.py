@@ -218,7 +218,7 @@ class Exp( ):
             # Play music event if any
             if music_event is not None and Exp.has_music[rb.id]:
                 logger.log("DEBUG",f"Robot {rb.id} plays note: {music_event[0]} for {music_event[1]} seconds at volume {music_event[2]}")
-                rb.play_note((music_event[0]%24)+54, music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
+                rb.play_note((music_event[0]%24)+56, music_event[1], volume=music_event[2], now_s=now_s, mute=mute)
                 Exp.current_notes_history.append((now_s, music_event[0]))
                 if Exp.my_controller[rb.id].beat_to_play is not None:
                     Exp.current_beat_played_history.append((now_s, Exp.my_controller[rb.id].beat_to_play))
