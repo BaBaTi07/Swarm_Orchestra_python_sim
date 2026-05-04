@@ -1,5 +1,6 @@
 from PyQt6.QtCore import QSize
 from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QToolButton, QVBoxLayout, QHBoxLayout, QSpinBox, QLabel, QFileDialog
+from PyQt6.QtGui import QIcon
 
 from GRAPHICS.viewer import Viewer
 from GRAPHICS.engine import Engine
@@ -16,7 +17,8 @@ class MainWindow(QMainWindow):
         self.eng    = Engine( self.viewer, delta_t_ms)
         # self.viewer.setMinimumHeight(300);
         self.viewer.resize(600, 600)
-        self.setWindowTitle("E-puck simulator (version 0.1)")
+        self.setWindowTitle("Swarm Orchestra simulator")
+        self.setWindowIcon(QIcon("assets/img/icon.png"))
         self.setMinimumSize(QSize(1000, 800))
         
         # Create Buttons
