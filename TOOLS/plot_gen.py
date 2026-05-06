@@ -176,6 +176,7 @@ def save_sync_plot(phase_sync_history, base_name: str, folder: str = "metrics/sy
 
     png_path = build_filename(f"{base_name}_sync_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    plt.savefig("metrics/last/mult_last_sync_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 
     logger.log("INFO", f"Saved sync metrics:{png_path}")
@@ -533,6 +534,9 @@ def generate_multiple_execution_harmonic_graph(all_notes_history, base_name: str
 
     if not all_notes_history:
         return
+    
+    #temporary here for test purpose
+    generate_multiple_execution_chord_graph(all_notes_history, base_name)
 
     processed_runs = []
 
@@ -608,9 +612,247 @@ def generate_multiple_execution_harmonic_graph(all_notes_history, base_name: str
 
     png_path = build_filename(f"{base_name}_harmonic_sync_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    plt.savefig("metrics/last/mult_last_harmonic_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 
     logger.log("INFO", f"Saved harmonic aggregate graph: {png_path}")
+
+def generate_multiple_execution_chord_graph(all_notes_history, base_name: str, folder: str = "metrics/chords/multiple", time_interval: float = 2.0, default_note_duration_s: float = 0.5, min_overlap_ratio: float = 0.8, min_time: float = 5.0):
+    """
+    Generate an aggregate graph over multiple executions showing the proportion
+    of notes belonging to a detected chord.
+
+    Two aggregate curves:
+    - chord notes, any timing
+    - chord notes, with temporal overlap
+    """
+
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    if not all_notes_history:
+        return
+
+    def all_possible_chords():
+        chords = []
+        for root in range(12):
+            for name, intervals in CHORD_PATTERNS.items():
+                notes = {(root + i) % 12 for i in intervals}
+                chords.append((root, name, notes))
+        return chords
+
+    possible_chords = all_possible_chords()
+    processed_any_runs = []
+    processed_same_runs = []
+
+    for run in all_notes_history:
+        if not run:
+            continue
+
+        data = np.array(run, dtype=float)
+
+        if data.ndim != 2 or data.shape[1] < 2:
+            continue
+
+        data = data[np.argsort(data[:, 0])]
+        data = data[data[:, 0] >= min_time]
+
+        if len(data) == 0:
+            continue
+
+        has_duration = data.shape[1] >= 3
+
+        max_time = data[-1, 0]
+        time_bins = np.arange(min_time, np.floor(max_time) + 1e-9, time_interval)
+
+        chord_notes_any_beat = []
+        chord_notes_same_beat = []
+
+        for t0 in time_bins:
+            t1 = t0 + time_interval
+
+            interval_notes = data[(data[:, 0] >= t0) & (data[:, 0] < t1)]
+
+            if len(interval_notes) == 0:
+                chord_notes_any_beat.append(np.nan)
+                chord_notes_same_beat.append(np.nan)
+                continue
+
+            total_notes = len(interval_notes)
+            pitch_classes = interval_notes[:, 1].astype(int) % 12
+
+            # ------------------------------------------------------------
+            # 1. Chord notes ignoring temporal overlap
+            # ------------------------------------------------------------
+            chord_pitch_classes_any = set()
+            unique_pcs = set(pitch_classes)
+
+            for root, name, chord_notes in possible_chords:
+                if chord_notes.issubset(unique_pcs):
+                    chord_pitch_classes_any.update(chord_notes)
+
+            notes_in_any_chord = sum(pc in chord_pitch_classes_any for pc in pitch_classes)
+            proportion_any = notes_in_any_chord / total_notes * 100.0
+            chord_notes_any_beat.append(proportion_any)
+
+            # ------------------------------------------------------------
+            # 2. Chord notes with temporal overlap
+            # ------------------------------------------------------------
+            chord_pitch_classes_same = set()
+
+            if has_duration:
+                starts = interval_notes[:, 0]
+                durations = interval_notes[:, 2]
+            else:
+                starts = interval_notes[:, 0]
+                durations = np.full(len(interval_notes), default_note_duration_s)
+
+            ends = starts + durations
+
+            for root, name, chord_notes in possible_chords:
+                matching_indices = [
+                    i for i, pc in enumerate(pitch_classes)
+                    if pc in chord_notes
+                ]
+
+                matching_pcs = {pitch_classes[i] for i in matching_indices}
+
+                if not chord_notes.issubset(matching_pcs):
+                    continue
+
+                chord_start = max(starts[i] for i in matching_indices)
+                chord_end = min(ends[i] for i in matching_indices)
+
+                overlap_duration = chord_end - chord_start
+
+                if overlap_duration <= 0:
+                    continue
+
+                min_duration = min(durations[i] for i in matching_indices)
+                overlap_ratio = overlap_duration / min_duration
+
+                if overlap_ratio >= min_overlap_ratio:
+                    chord_pitch_classes_same.update(chord_notes)
+
+            notes_in_same_chord = sum(pc in chord_pitch_classes_same for pc in pitch_classes)
+            proportion_same = notes_in_same_chord / total_notes * 100.0
+            chord_notes_same_beat.append(proportion_same)
+
+        if len(time_bins) > 1:
+            processed_any_runs.append((time_bins, np.array(chord_notes_any_beat, dtype=float)))
+            processed_same_runs.append((time_bins, np.array(chord_notes_same_beat, dtype=float)))
+
+    if not processed_any_runs:
+        logger.log("WARNING", "No valid notes_history found for aggregate chord plot")
+        return
+
+    t_max = max(t[-1] for t, _ in processed_any_runs)
+    time_grid = np.arange(min_time, t_max + 1e-9, time_interval)
+
+    def build_matrix(processed_runs):
+        mat = []
+
+        for t, y in processed_runs:
+            valid = ~np.isnan(y)
+
+            if np.sum(valid) < 2:
+                continue
+
+            t_valid = t[valid]
+            y_valid = y[valid]
+
+            yi = np.interp(time_grid, t_valid, y_valid)
+            yi[time_grid < t_valid[0]] = np.nan
+            yi[time_grid > t_valid[-1]] = np.nan
+
+            mat.append(yi)
+
+        if not mat:
+            return np.empty((0, len(time_grid)))
+
+        return np.array(mat, dtype=float)
+
+    any_mat = build_matrix(processed_any_runs)
+    same_mat = build_matrix(processed_same_runs)
+
+    if any_mat.size == 0 and same_mat.size == 0:
+        logger.log("WARNING", "No valid chord data after interpolation")
+        return
+
+    def compute_stats(mat):
+        if mat.size == 0:
+            return None
+
+        return {
+            "mean": np.nanmean(mat, axis=0),
+            "median": np.nanmedian(mat, axis=0),
+            "q25": np.nanpercentile(mat, 25, axis=0),
+            "q75": np.nanpercentile(mat, 75, axis=0),
+        }
+
+    any_stats = compute_stats(any_mat)
+    same_stats = compute_stats(same_mat)
+
+    plt.figure(figsize=(10, 5))
+
+    if any_stats is not None:
+        plt.fill_between(
+            time_grid,
+            any_stats["q25"],
+            any_stats["q75"],
+            alpha=0.15,
+            label="Any timing - middle 50%"
+        )
+        plt.plot(
+            time_grid,
+            any_stats["median"],
+            linewidth=2.5,
+            label="Any timing - median"
+        )
+        plt.plot(
+            time_grid,
+            any_stats["mean"],
+            linestyle="--",
+            linewidth=1.8,
+            label="Any timing - mean"
+        )
+
+    if same_stats is not None:
+        plt.fill_between(
+            time_grid,
+            same_stats["q25"],
+            same_stats["q75"],
+            alpha=0.15,
+            label="Temporal overlap - middle 50%"
+        )
+        plt.plot(
+            time_grid,
+            same_stats["median"],
+            linewidth=2.5,
+            label="Temporal overlap - median"
+        )
+        plt.plot(
+            time_grid,
+            same_stats["mean"],
+            linestyle="--",
+            linewidth=1.8,
+            label="Temporal overlap - mean"
+        )
+
+    plt.xlabel("Time (s)")
+    plt.ylabel("Notes belonging to a chord (%)")
+    plt.title("Chord-related notes across multiple runs")
+    plt.ylim(0, 105)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+
+    png_path = build_filename(f"{base_name}_chord_aggregate", folder, file_extension="png")
+    plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    plt.savefig("metrics/last/mult_last_chord_aggregate.png", dpi=180, bbox_inches="tight")
+    plt.close()
+
+    logger.log("INFO", f"Saved aggregate chord graph: {png_path}")
 
 def generate_multiple_execution_beat_evenness_graph(all_beat_played_history, base_name: str, folder: str = "metrics/beat_played", window_s: float = 2.0, n_beats: int = 4):
 
@@ -712,6 +954,7 @@ def generate_multiple_execution_beat_evenness_graph(all_beat_played_history, bas
 
     png_path = build_filename(f"{base_name}_beat_evenness_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    plt.savefig("metrics/last/mult_last_beat_evenness_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 
     logger.log("INFO", f"Saved aggregate beat evenness graph: {png_path}")
