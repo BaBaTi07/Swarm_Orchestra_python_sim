@@ -29,19 +29,28 @@ class HarmonyAlgo:
         self,
         nbr_beats: int,
         beat_duration_s: float,
-        note_memory_ttl_s: float = 5.0,
-        beat_memory_ttl_s: float = 5.0,
+        note_memory_ttl_s: float = 40.0, #gamme
+        chord_memory_ttl_s: float = 5.0,  #accord
+        beat_memory_ttl_s: float = 40.0,   #beat
         same_captor_merge_ttl_s: float = 1.0,
         fallback_volume: float = 0.6,
         beat_change_eval_delay_s: float = 2.0,
         bad_beat_penalty_decay: float = 0.98,
         dominant_beat_window_s: float = 10.0,
-        forbidden_pair_ttl_s: float = 10.0,
+        forbidden_pair_ttl_s: float = 5.0,
+
+        chord_commitment_ttl_s: float = 8.0,
+        chord_create_probability: float = 0.25,
+        chord_creation_score: float = 1.5,
+        chord_beat_join_boost: float = 1.8,
+        max_chord_beat_occupancy: int = 3,
+        min_scale_confidence_for_chords: float = 0.95,
     ):
         self.nbr_beats = nbr_beats
         self.beat_duration_s = beat_duration_s
 
         self.note_memory_ttl_s = note_memory_ttl_s
+        self.chord_memory_ttl_s = chord_memory_ttl_s
         self.beat_memory_ttl_s = beat_memory_ttl_s
         self.same_captor_merge_ttl_s = same_captor_merge_ttl_s
         self.fallback_volume = fallback_volume
@@ -60,10 +69,10 @@ class HarmonyAlgo:
 
         #from the last distinct notes, if a scale covers >95% of them,
         #consider it as stable and start playing chords from that scale.
-        self.scale_confidence_threshold = 0.95 
+        self.scale_confidence_threshold = 0.95
         self.scale_stability_count = 0
         self.last_scale_name = None
-        self.min_stable_scale_updates = 2
+        self.min_stable_scale_updates = 3
 
         # state of the current local harmonic commitment
         self.current_scale = None
@@ -96,6 +105,16 @@ class HarmonyAlgo:
         self.forbidden_note_beat_pairs = {}
 
         self.current_chord_name = None
+
+        # chord formation params
+        self.chord_commitment_ttl_s = chord_commitment_ttl_s
+        self.chord_create_probability = chord_create_probability
+        self.chord_creation_score = chord_creation_score
+        self.chord_beat_join_boost = chord_beat_join_boost
+        self.max_chord_beat_occupancy = max_chord_beat_occupancy
+        self.min_scale_confidence_for_chords = min_scale_confidence_for_chords
+
+        self.current_chord_until_s = 0.0
 
     # ------------------------------------------------------------------
     # Parsing / memory
@@ -282,7 +301,7 @@ class HarmonyAlgo:
 
     def is_scale_stable_enough(self, confidence: float) -> bool:
         return (
-            confidence >= self.scale_confidence_threshold
+            confidence >= self.min_scale_confidence_for_chords
             and self.scale_stability_count >= self.min_stable_scale_updates
         )
     
@@ -333,55 +352,56 @@ class HarmonyAlgo:
             grouped[e["beat"]].append(e)
         return grouped
 
-    def is_current_chord_still_valid(self, recent_events: list, current_note_event, scale):
-        """
-        Keep chord while:
-        - neighbors still exist
-        - current note still belongs to chord
-        - chord remains in local scale
-        - recent neighbor notes remain compatible with that chord
-        """
+    def is_current_chord_still_valid(self, recent_events: list, current_note_event, scale, time_s: float):
         if self.current_chord is None or self.current_chord_beat is None or scale is None:
             return False
 
-        if not recent_events:
+        if time_s > self.current_chord_until_s:
             return False
 
         if current_note_event is None:
             return False
 
         current_note = int(current_note_event[0]) % 12
+
         if current_note not in self.current_chord:
             return False
 
         if not self.current_chord.issubset(set(scale.notes)):
             return False
 
-        beat_events = [e for e in recent_events if e["beat"] == self.current_chord_beat]
+        beat_events = [
+            e for e in recent_events
+            if e["beat"] == self.current_chord_beat
+        ]
+
         if not beat_events:
             return False
 
         heard_notes = {e["note"] for e in beat_events}
+
+        # On garde l'accord si les voisins entendus sur ce beat restent compatibles.
         if not heard_notes.issubset(self.current_chord):
             return False
 
         return True
 
-    def find_chord_candidates(self, recent_events: list, scale, current_beat: int):
+    def find_chord_candidates(self, recent_events: list, scale, current_beat: int, scale_is_stable: bool):
         """
         Build candidate chords from recent events.
 
-        Candidate score is stronger when:
-        - two distinct notes of a chord are heard on the same beat
-        - current beat already matches
-        - more neighbor notes support the chord
+        Three candidate types:
+        1. strong same-beat chord candidates
+        2. weaker cross-beat harmonic candidates
+        3. proposed chords when the scale is stable, even if no chord exists yet
         """
         chords = self.get_valid_chords_for_scale(scale)
         grouped = self.group_events_by_beat(recent_events)
+        beat_usage = self.compute_local_beat_usage(recent_events)
 
         candidates = []
 
-        # same-beat candidates
+        # 1) same-beat candidates
         for beat, events in grouped.items():
             notes_on_beat = {e["note"] for e in events}
             count_on_beat = len(events)
@@ -395,17 +415,14 @@ class HarmonyAlgo:
 
                 score = 0.0
 
-                # strong signal if 2 different notes already on same beat
                 if len(present) >= 2:
                     score += 10.0
                 else:
-                    score += 2.0
+                    score += 3.0
 
-                # prefer staying on current beat
                 if beat == current_beat:
                     score += 5.0
 
-                # slightly reward chords supported by more recent activity
                 score += 0.3 * count_on_beat
 
                 candidates.append({
@@ -416,10 +433,11 @@ class HarmonyAlgo:
                     "present": present,
                     "missing": missing,
                     "score": score,
-                    "same_beat_support": True
+                    "same_beat_support": True,
+                    "is_proposed": False,
                 })
 
-        # cross-beat weaker candidates
+        # 2) cross-beat candidates
         all_notes = {e["note"] for e in recent_events}
         beat_set = {e["beat"] for e in recent_events}
 
@@ -427,10 +445,6 @@ class HarmonyAlgo:
             present = all_notes.intersection(chord["notes"])
             missing = chord["notes"] - all_notes
 
-            if len(present) == 0:
-                continue
-
-            # if already represented on same-beat candidates, keep cross-beat only as weaker alternative
             if len(present) >= 2 and len(beat_set) > 1:
                 candidates.append({
                     "chord_root": chord["root"],
@@ -440,13 +454,37 @@ class HarmonyAlgo:
                     "present": present,
                     "missing": missing,
                     "score": 3.0 + (2.0 if current_beat in beat_set else 0.0),
-                    "same_beat_support": False
+                    "same_beat_support": False,
+                    "is_proposed": False,
+                })
+
+        # 3) proposed chord candidates
+        if scale_is_stable and np.random.rand() < self.chord_create_probability:
+            target_beat = self.choose_best_unoccupied_beat(beat_usage)
+
+            if target_beat is None:
+                target_beat = current_beat
+
+            # prefer a chord containing the current note if possible
+            current_note_mod = None
+            # current_note_event is not available here, so this preference is handled later
+
+            for chord in chords:
+                candidates.append({
+                    "chord_root": chord["root"],
+                    "chord_notes": chord["notes"],
+                    "chord_name": chord["name"],
+                    "beat": target_beat,
+                    "present": set(),
+                    "missing": set(chord["notes"]),
+                    "score": self.chord_creation_score + np.random.rand() * 0.1,
+                    "same_beat_support": False,
+                    "is_proposed": True,
                 })
 
         if not candidates:
             return []
 
-        # keep best unique (chord, beat)
         unique = {}
         for c in candidates:
             key = (tuple(sorted(c["chord_notes"])), c["beat"])
@@ -457,6 +495,11 @@ class HarmonyAlgo:
         result.sort(key=lambda c: c["score"], reverse=True)
         return result
 
+    def get_recent_chord_events(self, time_s: float):
+        return [
+            e for e in self.note_history
+            if (time_s - e["time_s"]) <= self.chord_memory_ttl_s
+        ]
     # ------------------------------------------------------------------
     # Note choice
     # ------------------------------------------------------------------
@@ -486,11 +529,17 @@ class HarmonyAlgo:
         ):
             return current_note_mod
 
-        # best case: complete the chord
-        if len(missing) == 1:
-            note = list(missing)[0]
-            if not self.is_note_beat_pair_forbidden(note, target_beat, time_s):
-                return note
+        # best case: choose one of the missing chord notes
+        # even if the chord is far from complete
+        if len(missing) >= 1:
+            missing_allowed = [
+                int(n) % 12
+                for n in missing
+                if not self.is_note_beat_pair_forbidden(n, target_beat, time_s)
+            ]
+
+            if missing_allowed:
+                return int(np.random.choice(missing_allowed))
 
         # if chord is already complete, do not double
         if len(missing) == 0:
@@ -778,6 +827,10 @@ class HarmonyAlgo:
         else:
             p_change = 0.02
 
+        # Proposed chord: allow some active beat joining
+        if candidate.get("is_proposed", False):
+            p_change = max(p_change, 0.25)
+
         # 3) strong penalty if target beat is already more crowded
         if target_usage > current_usage:
             diff = target_usage - current_usage
@@ -792,6 +845,15 @@ class HarmonyAlgo:
         max_usage = max(beat_usage.values()) if beat_usage else 0
         if target_usage == max_usage and target_usage >= ideal_usage + 1:
             p_change *= 0.10
+
+        # In chord formation mode, slightly boost joining a harmonic beat
+        if present_count >= 1 and target_usage < self.max_chord_beat_occupancy:
+            p_change *= self.chord_beat_join_boost
+
+        # If this is a proposed chord, allow joining the proposed beat
+        # but still avoid overcrowding
+        if candidate.get("is_proposed", False) and target_usage < self.max_chord_beat_occupancy:
+            p_change *= self.chord_beat_join_boost
 
         # 6) if chord already sufficiently represented on target beat, don't reinforce it much more
         if same_beat_support and present_count >= 2 and target_usage >= 2:
@@ -835,6 +897,8 @@ class HarmonyAlgo:
                     self.failed_beat_consensus_count = 0
                     return exploratory_beat, "explore_unused_beat"
 
+        p_change = min(0.95, max(0.0, p_change))
+
         # 11) final probabilistic decision
         if np.random.rand() < p_change:
             self.failed_beat_consensus_count = 0
@@ -857,6 +921,7 @@ class HarmonyAlgo:
         self.update_memory(note_msgs, time_s)
 
         recent_events = self.get_recent_note_events(time_s)
+        chord_events = self.get_recent_chord_events(time_s)
         beat_events = self.get_recent_beat_events(time_s)
         self.cleanup_forbidden_pairs(time_s)
         self.update_distinct_note_history(recent_events)
@@ -907,8 +972,21 @@ class HarmonyAlgo:
             debug["reason"] = "scale_alignment_failed"
             return None, current_beat, debug
         
-        # hard collision rule: same note + same beat as a neighbor -> ban this pair temporarily
-        if self.detect_same_note_same_beat_collision(recent_events, current_note_event, current_beat):
+        apply_collision_rule = True
+
+        if self.current_chord is not None:
+            chord_events = [
+                e for e in chord_events
+                if e["beat"] == current_beat and e["note"] in self.current_chord
+            ]
+            distinct_chord_notes = {e["note"] for e in chord_events}
+
+            # During chord bootstrap, tolerate some duplicates.
+            # Once at least 2 chord notes exist locally, activate collision avoidance.
+            if len(distinct_chord_notes) < 2:
+                apply_collision_rule = False
+
+        if apply_collision_rule and self.detect_same_note_same_beat_collision(chord_events, current_note_event, current_beat):
             current_note_mod = int(current_note_event[0]) % 12 if current_note_event is not None else None
 
             if current_note_mod is not None:
@@ -941,13 +1019,14 @@ class HarmonyAlgo:
                     self.current_chord_root = None
                     self.current_chord_beat = None
                     self.current_chord_name = None
+                    self.current_chord_until_s = 0.0
 
                     debug["reason"] = f"forbidden_pair_escape::{alt_reason}"
                     debug["beat"] = alt_beat
                     return alt_note_event, alt_beat, debug
 
         # maintain current chord if still valid
-        if self.is_current_chord_still_valid(recent_events, current_note_event, scale):
+        if self.is_current_chord_still_valid(chord_events, current_note_event, scale, time_s):
             debug["reason"] = "maintain_current_chord"
             debug["chord_root"] = self.current_chord_root
             debug["chord_notes"] = sorted(list(self.current_chord))
@@ -955,12 +1034,13 @@ class HarmonyAlgo:
             return current_note_event, self.current_chord_beat, debug
 
         # find candidate chords
-        candidates = self.find_chord_candidates(recent_events, scale, current_beat)
+        candidates = self.find_chord_candidates(chord_events, scale, current_beat, self.is_scale_stable_enough(scale_confidence))
         if not candidates:
             self.current_chord = None
             self.current_chord_root = None
             self.current_chord_beat = None
             self.current_chord_name = None
+            self.current_chord_until_s = 0.0
             debug["used_fallback"] = True
             debug["reason"] = "no_chord_candidate"
             return None, current_beat, debug
@@ -973,6 +1053,7 @@ class HarmonyAlgo:
             self.current_chord_root = None
             self.current_chord_beat = None
             self.current_chord_name = None
+            self.current_chord_until_s = 0.0
             debug["used_fallback"] = True
             debug["reason"] = "candidate_note_selection_failed"
             return None, current_beat, debug
@@ -998,6 +1079,7 @@ class HarmonyAlgo:
         self.current_chord_root = best_candidate["chord_root"]
         self.current_chord_name = best_candidate["chord_name"]
         self.current_chord_beat = chosen_beat
+        self.current_chord_until_s = time_s + self.chord_commitment_ttl_s
 
         note_event = (int(chosen_note), self.beat_duration_s, self.fallback_volume)
 
@@ -1006,5 +1088,7 @@ class HarmonyAlgo:
         debug["chord_notes"] = sorted(list(self.current_chord))
         debug["chord_name"] = self.current_chord_name
         debug["beat"] = chosen_beat
+        debug["current_chord_until_s"] = self.current_chord_until_s
+        debug["chord_commitment_remaining_s"] = max(0.0, self.current_chord_until_s - time_s)
 
         return note_event, chosen_beat, debug
