@@ -185,7 +185,7 @@ def save_harmonic_scale_plot(notes_history, base_name: str, folder: str = "metri
     then plot a bar chart of the counts for the best scale"""
 
     #temporary here for test purpose
-    save_chord_count_plot(notes_history, base_name, folder="metrics/chords")
+    save_chord_count_plot(notes_history, base_name)
 
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
@@ -286,13 +286,13 @@ def save_harmonic_scale_plot(notes_history, base_name: str, folder: str = "metri
 
     logger.log("INFO", f"Saved harmonic scale metrics: {png_path}")
 
-def save_chord_count_plot(notes_history, base_name: str, folder: str = "metrics/chords", time_interval: float = 2.0, default_note_duration_s: float = 0.5, min_overlap_ratio: float = 0.8):
+def save_chord_count_plot( notes_history, base_name: str, folder: str = "metrics/chords/new", time_interval: float = 2.0, default_note_duration_s: float = 0.5, min_overlap_ratio: float = 0.8):
     """
-    Plot chord counts per interval.
+    Plot the proportion of notes that belong to a detected chord per interval.
 
     Two curves:
-    - chords_any_beat: chords detected in the interval, regardless of timing overlap
-    - chords_same_beat: chords whose notes overlap in time by at least min_overlap_ratio
+    - chord_notes_any_beat: % of notes belonging to a chord in the interval, ignoring temporal overlap
+    - chord_notes_same_beat: % of notes belonging to a chord with sufficient temporal overlap
 
     notes_history can contain:
     - (time_s, midi_note)
@@ -323,8 +323,8 @@ def save_chord_count_plot(notes_history, base_name: str, folder: str = "metrics/
     max_time = data[-1, 0]
     time_bins = np.arange(0, np.floor(max_time) + time_interval, time_interval)
 
-    chords_any_beat = []
-    chords_same_beat = []
+    chord_notes_any_beat = []
+    chord_notes_same_beat = []
 
     def all_possible_chords():
         chords = []
@@ -336,91 +336,96 @@ def save_chord_count_plot(notes_history, base_name: str, folder: str = "metrics/
 
     possible_chords = all_possible_chords()
 
-    def overlap_ratio(events):
-        """
-        events: list of (start, end)
-        Returns overlap duration / shortest note duration.
-        """
-        starts = [e[0] for e in events]
-        ends = [e[1] for e in events]
+    for t0 in time_bins:
+        t1 = t0 + time_interval
 
-        overlap_start = max(starts)
-        overlap_end = min(ends)
-        overlap = max(0.0, overlap_end - overlap_start)
+        interval_notes = data[(data[:, 0] >= t0) & (data[:, 0] < t1)]
 
-        shortest = min(end - start for start, end in events)
-        if shortest <= 0:
-            return 0.0
-
-        return overlap / shortest
-
-    for t in time_bins:
-        interval_data = data[(data[:, 0] >= t) & (data[:, 0] < t + time_interval)]
-
-        if len(interval_data) == 0:
-            chords_any_beat.append(0)
-            chords_same_beat.append(0)
+        if len(interval_notes) == 0:
+            chord_notes_any_beat.append(0.0)
+            chord_notes_same_beat.append(0.0)
             continue
 
-        notes_mod = set((interval_data[:, 1].astype(int) % 12))
+        total_notes = len(interval_notes)
+        pitch_classes = interval_notes[:, 1].astype(int) % 12
 
-        # 1) Chords regardless of beat / overlap
-        any_count = 0
-        for _, _, chord_notes in possible_chords:
-            if chord_notes.issubset(notes_mod):
-                any_count += 1
+        # ------------------------------------------------------------
+        # 1. Chord notes ignoring temporal overlap
+        # ------------------------------------------------------------
+        chord_pitch_classes_any = set()
 
-        # 2) Chords with actual time overlap
-        same_beat_count = 0
+        unique_pcs = set(pitch_classes)
 
-        events = []
-        for row in interval_data:
-            start = float(row[0])
-            note = int(row[1]) % 12
-            duration = float(row[2]) if has_duration else default_note_duration_s
-            end = start + duration
-            events.append({"note": note, "start": start, "end": end})
+        for root, name, chord_notes in possible_chords:
+            if chord_notes.issubset(unique_pcs):
+                chord_pitch_classes_any.update(chord_notes)
 
-        for _, _, chord_notes in possible_chords:
-            chord_events = [e for e in events if e["note"] in chord_notes]
-            chord_notes_present = {e["note"] for e in chord_events}
+        notes_in_any_chord = sum(pc in chord_pitch_classes_any for pc in pitch_classes)
+        proportion_any = notes_in_any_chord / total_notes * 100.0
+        chord_notes_any_beat.append(proportion_any)
 
-            if not chord_notes.issubset(chord_notes_present):
+        # ------------------------------------------------------------
+        # 2. Chord notes with temporal overlap
+        # ------------------------------------------------------------
+        chord_pitch_classes_same = set()
+
+        if has_duration:
+            starts = interval_notes[:, 0]
+            durations = interval_notes[:, 2]
+        else:
+            starts = interval_notes[:, 0]
+            durations = np.full(len(interval_notes), default_note_duration_s)
+
+        ends = starts + durations
+
+        for root, name, chord_notes in possible_chords:
+            matching_indices = [
+                i for i, pc in enumerate(pitch_classes)
+                if pc in chord_notes
+            ]
+
+            matching_pcs = {pitch_classes[i] for i in matching_indices}
+
+            if not chord_notes.issubset(matching_pcs):
                 continue
 
-            selected_events = []
-            for chord_note in chord_notes:
-                candidates = [e for e in chord_events if e["note"] == chord_note]
-                if not candidates:
-                    break
-                selected_events.append(candidates[0])
+            chord_start = max(starts[i] for i in matching_indices)
+            chord_end = min(ends[i] for i in matching_indices)
 
-            if len(selected_events) != len(chord_notes):
+            overlap_duration = chord_end - chord_start
+
+            if overlap_duration <= 0:
                 continue
 
-            if overlap_ratio([(e["start"], e["end"]) for e in selected_events]) >= min_overlap_ratio:
-                same_beat_count += 1
+            min_duration = min(durations[i] for i in matching_indices)
+            overlap_ratio = overlap_duration / min_duration
 
-        chords_any_beat.append(any_count)
-        chords_same_beat.append(same_beat_count)
+            if overlap_ratio >= min_overlap_ratio:
+                chord_pitch_classes_same.update(chord_notes)
 
-    plt.figure(figsize=(12, 6))
+        notes_in_same_chord = sum(pc in chord_pitch_classes_same for pc in pitch_classes)
+        proportion_same = notes_in_same_chord / total_notes * 100.0
+        chord_notes_same_beat.append(proportion_same)
 
-    plt.step(time_bins, chords_any_beat, where="post", linewidth=2.5, marker="o", markersize=3, label="Chords regardless of beat")
-    plt.step(time_bins, chords_same_beat, where="post", linewidth=2.5, marker="o", markersize=3, label="Chords with >= 80% overlap")
+    # ------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------
+    plt.figure(figsize=(10, 5))
+
+    plt.plot(time_bins, chord_notes_any_beat, label="Chord notes, any timing")
+    plt.plot(time_bins, chord_notes_same_beat, label="Chord notes, temporal overlap")
 
     plt.xlabel("Time (s)")
-    plt.ylabel(f"Number of chords per {time_interval:.0f}s")
-    plt.title("Evolution of detected chords over time")
-    plt.grid(True, alpha=0.3)
+    plt.ylabel("Notes belonging to a chord (%)")
+    plt.title("Proportion of chord-related notes over time")
+    plt.ylim(0, 100)
+    plt.grid(True)
     plt.legend()
 
     png_path = build_filename(f"{base_name}_chord_count", folder, file_extension="png")
-    plt.savefig(png_path, dpi=150, bbox_inches="tight")
-    plt.savefig("metrics/last/last_chord_count.png", dpi=150, bbox_inches="tight")
+    plt.savefig(png_path, dpi=300, bbox_inches="tight")
+    plt.savefig("metrics/last/last_chord_count.png", dpi=300, bbox_inches="tight")
     plt.close()
-
-    logger.log("INFO", f"Saved chord count metrics: {png_path}")
 
 def save_beat_played_plot(beat_played_history, base_name: str, folder: str = "metrics/beat_played", window_s = 2.0):
     """plot a step chart of the beat played over time
