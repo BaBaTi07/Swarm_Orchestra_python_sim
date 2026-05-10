@@ -73,6 +73,12 @@ def evaluate_musical_quality(
         min_overlap_ratio=min_overlap_ratio
     )
 
+    chord_harmony_score_regardless_of_beats = compute_chord_harmony_score_regardless_of_beats(
+        notes_data,
+        time_bins,
+        time_interval=time_interval,
+    )
+
     beat_evenness_score = compute_beat_evenness_score(
         beat_played_history,
         min_time=min_time,
@@ -90,10 +96,20 @@ def evaluate_musical_quality(
         n_beats=4
     )
 
+    chord_harmony_combined = compute_weighted_final_score(
+    {
+        "same_beat": chord_harmony_score,
+        "global": chord_harmony_score_regardless_of_beats,
+    },
+    {
+        "same_beat": 0.5,
+        "global": 0.5,
+    }
+)
     display_scores = {
         "phase_sync": phase_sync_score,
         "scale_harmony": scale_harmony_score,
-        "chord_harmony": chord_harmony_score,
+        "chord_harmony": chord_harmony_combined,
         "beat_evenness": beat_evenness_score,
         "note_diversity_by_beat": note_diversity_by_beat_score,
     }
@@ -107,7 +123,7 @@ def evaluate_musical_quality(
             baseline=0.70
         ),
 
-        "chord_harmony": chord_harmony_score,
+        "chord_harmony": chord_harmony_combined,
         "beat_evenness": beat_evenness_score,
         "note_diversity_by_beat": note_diversity_by_beat_score,
     }
@@ -299,6 +315,40 @@ def compute_scale_harmony_score(notes_data, time_bins, time_interval: float):
 # ============================================================
 # Metric 3: chord harmony
 # ============================================================
+def compute_chord_harmony_score_regardless_of_beats(notes_data, time_bins, time_interval: float):
+    # check if the a chord can be form in a short time window, without considering the beat information.
+    # This is a more permissive metric, as it allows chords to be formed even if the notes are not perfectly aligned in time.
+    # It is useful to evaluate the harmony of the swarm because every chord can not be form to avoid beat crowding
+    possible_chords = get_possible_chords()
+    chord_scores = []
+
+    for t0 in time_bins:
+        t1 = t0 + time_interval
+
+        interval_notes = notes_data[
+            (notes_data[:, 0] >= t0) &
+            (notes_data[:, 0] < t1)
+        ]
+
+        if len(interval_notes) == 0:
+            chord_scores.append(np.nan)
+            continue
+
+        pitch_classes = interval_notes[:, 1].astype(int) % 12
+        total_notes = len(interval_notes)
+
+        chord_pitch_classes = set()
+
+        for root, name, chord_notes in possible_chords:
+            if chord_notes.issubset(set(pitch_classes)):
+                chord_pitch_classes.update(chord_notes)
+
+        notes_in_chord = sum(pc in chord_pitch_classes for pc in pitch_classes)
+        score = notes_in_chord / total_notes
+        chord_scores.append(score)
+
+    return safe_mean(chord_scores)
+
 
 def compute_chord_harmony_score(
     notes_data,
