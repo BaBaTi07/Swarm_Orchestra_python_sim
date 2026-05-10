@@ -14,6 +14,9 @@ class RhythmAlgo:
         self.min_duration_factor = min_duration_factor
         self.max_duration_factor = max_duration_factor
 
+        self.max_num_neighbors = 0
+        self.crowded = False
+
         self.role_duration_factors = {
             "isolated": {
                 "beats" :[[0, 0.5, 1], [0, 0.5, 1.5],[0, 0.5, 2]],
@@ -30,32 +33,16 @@ class RhythmAlgo:
                 "duration_factor": 0.75,
                 "volume": 0.5
             },
-            "crowded_unstable_scale": {
-                "beats": [0],
-                "duration_factor": 0.7,
-                "volume": 0.4
-            },
             "stable_scale": {
                 "beats": [0],
                 "duration_factor": 1.0,
                 "volume": 0.8
-            },
-            "crowded_scale": {
-                "beats": [0],
-                "duration_factor": 0.9,
-                "volume": 0.65
             },
             "stable_chord": {
                 "beats": [0],
                 "duration_factor": 2.0,
                 "volume": 1.0
             },
-            "crowded_chord": {
-                "beats": [0],
-                "duration_factor": 1.8,
-                "volume": 0.8
-            },
-            
         }
 
     def infer_role(self, harmony_debug: dict) -> str:
@@ -63,29 +50,24 @@ class RhythmAlgo:
         scale_confidence = harmony_debug.get("scale_confidence", 0.0)
         chord_notes = harmony_debug.get("chord_notes", None)
         reason = harmony_debug.get("reason", "")
-        crowded = False
-
-        if recent_neighbors == 0:
-            return "isolated"
+        self.max_num_neighbors = max(self.max_num_neighbors, recent_neighbors)
+        self.crowded = False
         
-        if recent_neighbors >= 10:
-            crowded = True
+        if recent_neighbors >= 0.75 * self.max_num_neighbors:
+            self.crowded = True
 
         if scale_confidence < 0.5:
             return "no_scale"
 
         if scale_confidence < 0.7:
-            if crowded:
-                return "crowded_unstable_scale"
             return "unstable_scale"
+        
+        if recent_neighbors  <= 0.25 * self.max_num_neighbors:
+            return "isolated"
 
         if chord_notes is not None and "chord" in reason:
-            if crowded:
-                return "crowded_chord"
             return "stable_chord"
-        
-        if crowded:
-            return "crowded_scale"
+
         return "stable_scale"
 
     def compute_note_duration(self, harmony_debug: dict):
@@ -95,6 +77,10 @@ class RhythmAlgo:
         duration_factor = param["duration_factor"]
 
         volume = param["volume"]
+
+        if self.crowded:
+            duration_factor *= 0.9
+            volume *= 0.8
 
         beats = param["beats"]
         if len(beats) > 1:
