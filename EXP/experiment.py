@@ -8,6 +8,7 @@ from WORLD.musicbot import MusicBot
 from SENSORS.ir_comm import IRMedium, IRCommConfig
 from TOOLS.plot_gen import *
 from CONTROL.sync_algo import SyncAlgo
+from TOOLS.evaluation import evaluate_musical_quality
 
 class Exp( ):
     num_trials     = 0
@@ -125,6 +126,8 @@ class Exp( ):
                 Exp.midi.stop() 
                 save_beat_played_plot(Exp.current_beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played")
                 save_harmonic_scale_plot(Exp.current_notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales")
+                evaluate_musical_quality(Exp.current_notes_history, Exp.current_beat_played_history, Exp.current_phase_sync_history, base_name=Exp.name if Exp.name else f"trial_{Exp.trial}", folder="metrics/quality/EXP", plot=True)
+                
                 # add the history to the list of history for all trials
                 Exp.phase_sync_history.append(Exp.current_phase_sync_history)
                 Exp.notes_history.append(Exp.current_notes_history)
