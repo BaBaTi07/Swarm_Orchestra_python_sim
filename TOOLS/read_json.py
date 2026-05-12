@@ -1,7 +1,7 @@
 import json
 import numpy as np
 
-from GRAPHICS.interface import *
+#from graphics.interface import *
 from WORLD.arena import *
 from EXP.experiment import *
 from WORLD.epuck import *
