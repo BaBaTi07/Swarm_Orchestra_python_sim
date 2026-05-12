@@ -78,11 +78,11 @@ if __name__ == "__main__" :
     
     
     if flag_viewing:
-        from PyQt6.QtWidgets import QApplication
+        """from PyQt6.QtWidgets import QApplication
         app = QApplication([]) # create the QApplication
         window = MainWindow(delta_t_ms) # create the main window
         window.show()
-        app.exec() # start the event loop
+        app.exec() # start the event loop"""
     else:
         Exp.exp_engine(mute=True)
         sys.exit()
