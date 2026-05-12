@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import argparse
 
-from GRAPHICS.interface import MainWindow
+from graphics.interface import MainWindow
 
 from TOOLS.read_json import * 
 from EXP.experiment import *
@@ -39,7 +39,6 @@ def preamble( ):
         flag_viewing = False
     else:
         flag_viewing = True
-        from PyQt6.QtWidgets import QApplication
     
     if args.log:
         if args.log in logger.levels:
@@ -79,6 +78,7 @@ if __name__ == "__main__" :
     
     
     if flag_viewing:
+        from PyQt6.QtWidgets import QApplication
         app = QApplication([]) # create the QApplication
         window = MainWindow(delta_t_ms) # create the main window
         window.show()
