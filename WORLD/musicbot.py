@@ -10,13 +10,13 @@ from TOOLS.note_to_color import note_to_color
 
 
 from WORLD.shapes import Diff_drive_robot
-from OpenGL.GLU import gluNewQuadric, gluCylinder, gluDisk
+"""from OpenGL.GLU import gluNewQuadric, gluCylinder, gluDisk
 from OpenGL.GL import (
     glPushMatrix, glPopMatrix, glTranslatef,
     glDisable, glEnable, glLineWidth, glColor3f,
     glBegin, glEnd, glVertex3f,glRotatef, GL_LINES, GL_LIGHTING, GL_QUADS
 )
-
+"""
 class MusicBot(Diff_drive_robot):
     # --- Dimensions (mètres) ---
     robot_radius = 0.150   # 300 mm diameter
@@ -84,7 +84,7 @@ class MusicBot(Diff_drive_robot):
                 duration_s=duration_s,
                 volume_0_1=volume
             )
-    def draw_led(self):
+    """def draw_led(self):
 
         # éteint si expiré
         if self.time_s >= self.led_until_s:
@@ -112,8 +112,9 @@ class MusicBot(Diff_drive_robot):
         gluDisk(quad, 0.0, led_radius, 16, 1)
         glPopMatrix()
         glEnable(GL_LIGHTING)
+"""
 
-    def draw(self):
+    """def draw(self):
         
         super().draw()
 
@@ -177,4 +178,4 @@ class MusicBot(Diff_drive_robot):
             glLineWidth(1.0)
             glEnable(GL_LIGHTING)
 
-        glPopMatrix()
+        glPopMatrix()"""

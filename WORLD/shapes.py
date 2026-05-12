@@ -18,7 +18,7 @@ class Ring(Shapes):
         self.radius = radius
         self.height = height
         
-    def draw (self, slices=48):
+    """def draw (self, slices=48):
         glPushMatrix()
         glTranslatef(self.pos[0], self.pos[2], self.pos[1])
         #Rotation of the ring body
@@ -42,14 +42,14 @@ class Ring(Shapes):
             # High Vertex
             glVertex3f(self.radius * x, self.height, self.radius * z)
         glEnd()
-        glPopMatrix()
+        glPopMatrix()"""
 
 class Cuboid (Shapes):
     def __init__ ( self, pos: NDArray[np.float64], dim: NDArray[np.float64], rot: NDArray[np.float64], colour: NDArray[np.float64] ):
         super().__init__(pos, rot, colour)
         self.dim = dim # dims[0] = length, dim[1] = width dim[2] = height
         
-    def draw(self):
+    """def draw(self):
         glPushMatrix()
         # Translation of cuboud body
         glTranslatef(self.pos[0], self.pos[2]+self.dim[2]/2, self.pos[1])
@@ -124,7 +124,7 @@ class Cuboid (Shapes):
         glLineWidth(1.0)
         glEnable(GL_LIGHTING)
 
-        glPopMatrix()
+        glPopMatrix()"""
         
         
 class Cylinder(Shapes):
@@ -133,7 +133,7 @@ class Cylinder(Shapes):
         self.radius = radius
         self.height = height
 
-    def draw (self, slices=64):
+    """def draw (self, slices=64):
         glPushMatrix()
         # ---- Trslate the cylinder body ----
         glTranslatef(self.pos[0], self.pos[2], self.pos[1]) 
@@ -192,7 +192,7 @@ class Cylinder(Shapes):
 
         glLineWidth(1.0)
         glEnable(GL_LIGHTING)
-        glPopMatrix()
+        glPopMatrix()"""
 
 class Diff_drive_robot(Cylinder):
     
