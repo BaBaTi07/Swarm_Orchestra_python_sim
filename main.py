@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 import argparse
-from PyQt6.QtWidgets import QApplication
+
 from GRAPHICS.interface import MainWindow
 
 from TOOLS.read_json import * 
@@ -39,6 +39,7 @@ def preamble( ):
         flag_viewing = False
     else:
         flag_viewing = True
+        from PyQt6.QtWidgets import QApplication
     
     if args.log:
         if args.log in logger.levels:
