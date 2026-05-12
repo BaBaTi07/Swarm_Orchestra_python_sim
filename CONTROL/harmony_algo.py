@@ -44,11 +44,12 @@ class HarmonyAlgo:
         chord_creation_score: float = 1.5,
         chord_beat_join_boost: float = 2.5,
         max_chord_beat_occupancy: int = 5,
-        min_scale_confidence_for_chords: float = 0.90,
 
         candidate_scale_threshold: float = 0.95,
         strict_scale_threshold_for_chords: float = 1.0,
         disambiguation_probability: float = 0.80,
+
+        min_stable_scale_updates: int = 3
     ):
         self.nbr_beats = nbr_beats
         self.beat_duration_s = beat_duration_s
@@ -73,10 +74,9 @@ class HarmonyAlgo:
 
         #from the last distinct notes, if a scale covers >95% of them,
         #consider it as stable and start playing chords from that scale.
-        self.scale_confidence_threshold = 0.95
         self.scale_stability_count = 0
         self.last_scale_name = None
-        self.min_stable_scale_updates = 3
+        self.min_stable_scale_updates = min_stable_scale_updates
 
         # state of the current local harmonic commitment
         self.current_scale = None
@@ -116,7 +116,6 @@ class HarmonyAlgo:
         self.chord_creation_score = chord_creation_score
         self.chord_beat_join_boost = chord_beat_join_boost
         self.max_chord_beat_occupancy = max_chord_beat_occupancy
-        self.min_scale_confidence_for_chords = min_scale_confidence_for_chords
 
         self.current_chord_until_s = 0.0
 

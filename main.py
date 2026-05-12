@@ -16,7 +16,8 @@ def preamble( ):
     parser.add_argument("-log", type=str, help="set the log level (DEBUG, INFO, WARN, ERROR, NONE)")
     parser.add_argument("-instrument", type=str, help="set the instrument directory (if none -> Basic sound waveforms will be used)")
     parser.add_argument("-name", type=str, help="name of the experiment")
-    parser.set_defaults(seed = 0, viewing=False)
+    parser.add_argument("-training", type=bool, help="if true it triggers the training mode (not in viewing mode)")
+    parser.set_defaults(seed = 0, viewing=False, training=False)
     args = parser.parse_args()
     
     if args.seed:
@@ -52,7 +53,9 @@ def preamble( ):
         instrument_path = args.instrument
     else:
         instrument_path = None
-        
+
+    Exp.set_training_mode(args.training)
+
     return n_seed, f_name, flag_viewing, instrument_path
 
     

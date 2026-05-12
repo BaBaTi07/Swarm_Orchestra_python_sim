@@ -9,7 +9,9 @@ from SENSORS.ir_comm import IRMedium, IRCommConfig
 from TOOLS.plot_gen import *
 from CONTROL.sync_algo import SyncAlgo
 from TOOLS.evaluation import evaluate_musical_quality
-from TOOLS.qualityScoreHistory import QualityScoresHistory
+from TOOLS.qualityScoresHistory import QualityScoresHistory
+from TOOLS.bounded_normal import bounded_normal
+from datetime import datetime
 
 class Exp( ):
     num_trials     = 0
@@ -19,6 +21,22 @@ class Exp( ):
     iter          = 0
     dt_s          = 0.2
     sim_time_s     = 0.0
+    training_mode  = False
+    training_args  = {
+        "note_memory_ttl_s": 80.0,
+        "chord_memory_ttl_s": 6.0,
+        "beat_memory_ttl_s": 40.0,
+        "dominant_beat_window_s": 20.0,
+        "chord_commitment_ttl_s": 12.0,
+        "chord_create_probability": 0.25,
+        "chord_creation_score": 1.5,
+        "chord_beat_join_boost": 2.5,
+        "candidate_scale_threshold": 0.95,
+        "disambiguation_probability": 0.8,
+        "min_stable_scale_updates": 3,
+    }
+    best_training_args = training_args.copy()
+    name           = None
     has_music = [False]* len(Arena.robot)
     has_ir_comm = [False]* len(Arena.robot)
     midi          = MidiRecorder(tempo_bpm=120.0)  # Global MIDI recorder for the experiment
@@ -40,6 +58,9 @@ class Exp( ):
     ))
 
     qualityScoresHistory = QualityScoresHistory()
+
+    def set_training_mode(training_mode: bool):
+        Exp.training_mode = training_mode
 
     def set_name(name):
         Exp.name = name
@@ -91,7 +112,10 @@ class Exp( ):
                 rb.ir_comm.reset()
 
             if Exp.has_music[rb.id]:
-                Exp.my_controller[rb.id] = SwarmMusicFsm(0.6, 50)
+                if not Exp.training_mode:
+                    Exp.my_controller[rb.id] = SwarmMusicFsm(0.6, 50)
+                else: 
+                    Exp.my_controller[rb.id] = SwarmMusicFsm(0.6, 50, training_args=Exp.training_args)
             else:
                 Exp.my_controller[rb.id] = Fsm(0.6, 50)
 
@@ -131,7 +155,7 @@ class Exp( ):
                 save_beat_played_plot(Exp.current_beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played")
                 save_harmonic_scale_plot(Exp.current_notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales")
                 result=evaluate_musical_quality(Exp.current_phase_sync_history, Exp.current_notes_history, Exp.current_beat_played_history, base_name=Exp.name if Exp.name else f"trial_{Exp.trial}", folder="metrics/quality/EXP", plot=True)
-                Exp.qualityScoresHistory.add_scores(result["display_scores"])
+                Exp.qualityScoresHistory.add_scores(result["display_scores"] | {"final_score": result["final_score"]})
                 # add the history to the list of history for all trials
                 Exp.phase_sync_history.append(Exp.current_phase_sync_history)
                 Exp.notes_history.append(Exp.current_notes_history)
@@ -145,18 +169,67 @@ class Exp( ):
             save_sync_plot(Exp.phase_sync_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/phase_sync")
             generate_multiple_execution_beat_evenness_graph(Exp.beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played/multiple_trials")
             generate_multiple_execution_harmonic_graph(Exp.notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales/multiple_trials")
-            Exp.qualityScoresHistory.plot_all_score_history(Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/quality/multiple_trials")
+            Exp.qualityScoresHistory.plot_all_score_history(Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/quality/EXP/multiple_trials")
             
             return False
         else:
             return True
     
     def exp_engine(mute=False):
-        Exp.init_all_trials()
-        while ( Exp.finalise_all_trials() ):
-            Exp.init_single_trial()
-            while ( Exp.finalise_single_trial() ):
-                Exp.make_iteration(mute)
+        if not Exp.training_mode:
+            Exp.init_all_trials()
+            while ( Exp.finalise_all_trials() ):
+                Exp.init_single_trial()
+                while ( Exp.finalise_single_trial() ):
+                    Exp.make_iteration(mute)
+        else:
+            best_score = 0
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            logger.log("WRITE", f"--------Nouvelle entrainement - {timestamp} ----------")
+            while best_score < 0.9: # arbitrary threshold to stop training, can be changed or made into an argument
+                Exp.init_all_trials()
+                n = 0
+                total_score = 0
+                while ( Exp.finalise_all_trials() ):
+                    Exp.init_single_trial()
+
+                    while ( Exp.finalise_single_trial() ):
+                        Exp.make_iteration(mute)
+
+                    last_score = Exp.qualityScoresHistory.get_final_score_history()[-1] if Exp.qualityScoresHistory.get_final_score_history() else 0
+                    if last_score < 0.6:
+                        
+                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Score: {last_score:.3f} - Not good enough, moving to next trial.")
+                        break # if the score is not good enough, we can stop the current trial and start a new one to save time during training
+                    else:
+                        total_score += last_score
+                        n += 1  
+                    print(last_score)
+                    logger.log("WRITE", f"Trial {Exp.trial} ended with final score: {last_score:.3f}")
+                
+                mean_score = total_score / n if n > 0 else 0  
+                if mean_score > best_score:
+                    best_score = mean_score
+                    Exp.best_training_args = Exp.training_args.copy()
+                    logger.log("WRITE", f"$$$$ New best score achieved: {best_score:.3f} with training args: {Exp.training_args}")
+                else:
+                    logger.log("WRITE", f"Current score {mean_score:.3f} does not improve the best score: {best_score:.3f}")
+                # update training args for the next trial,
+                # TODO :change this to a random close from the current best args
+                Exp.training_args = {
+                    "note_memory_ttl_s": bounded_normal(Exp.best_training_args["note_memory_ttl_s"], 5.0, 0.0, 100.0),
+                    "chord_memory_ttl_s": bounded_normal(Exp.best_training_args["chord_memory_ttl_s"], 5.0, 0.0, 100.0),
+                    "beat_memory_ttl_s": bounded_normal(Exp.best_training_args["beat_memory_ttl_s"], 5.0, 0.0, 100.0),
+                    "dominant_beat_window_s": bounded_normal(Exp.best_training_args["dominant_beat_window_s"], 5.0, 0.0, 100.0),
+                    "chord_commitment_ttl_s": bounded_normal(Exp.best_training_args["chord_commitment_ttl_s"], 5.0, 0.0, 100.0),
+                    "chord_create_probability": bounded_normal(Exp.best_training_args["chord_create_probability"], 0.05, 0.0, 1.0),
+                    "chord_creation_score": bounded_normal(Exp.best_training_args["chord_creation_score"], 0.5, 0.0, 10.0),
+                    "chord_beat_join_boost": bounded_normal(Exp.best_training_args["chord_beat_join_boost"], 0.5, 0.0, 10.0),
+                    "candidate_scale_threshold": bounded_normal(Exp.best_training_args["candidate_scale_threshold"], 0.05, 0.0, 1.0),
+                    "disambiguation_probability": bounded_normal(Exp.best_training_args["disambiguation_probability"], 0.05, 0.0, 1.0),
+                    "min_stable_scale_updates": int(bounded_normal(Exp.best_training_args["min_stable_scale_updates"], 0.5, 0.0, 10.0)),
+                }
+                logger.log("WRITE", f"Updated training args for next trial: {Exp.training_args}")
 
     def get_ir_messages(rb, time_s: float, dt_s: float) -> list:
         msgs = []

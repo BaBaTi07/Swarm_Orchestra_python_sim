@@ -9,7 +9,7 @@ from CONTROL.RythmAlgo import RhythmAlgo
 
 class SwarmMusicFsm(Fsm):
 
-    def __init__(self, rho: float, fm_length: int):
+    def __init__(self, rho: float, fm_length: int, training_args: dict | None = None):
 
         super().__init__(rho, fm_length)
         self.start = True
@@ -37,19 +37,46 @@ class SwarmMusicFsm(Fsm):
 
         self.octave_shift = 0
 
-        self.sync_algo = SyncAlgo(
-            algo_type="memory",  #"kuramoto_basic", "kuramoto_confidence", "kuramoto_local_error", "memory"
-            cycle_time_s=self.cicle_time_s,
-            phase_levels=128,
-            K=0.5,
-            self_phase_weight=0.25,
-            max_memory_cycles=60
-        )
-
-        self.harmony_algo = HarmonyAlgo(
-            nbr_beats=self.nbr_beats,
-            beat_duration_s=self.beat_duration_s,
-        )
+        if training_args is None:
+            self.sync_algo = SyncAlgo(
+                algo_type="memory",  #"kuramoto_basic", "kuramoto_confidence", "kuramoto_local_error", "memory"
+                cycle_time_s=self.cicle_time_s,
+                phase_levels=128,
+                K=0.5,
+                self_phase_weight=0.25,
+                max_memory_cycles=60
+            )
+        else:
+            self.sync_algo = SyncAlgo(
+                algo_type= "memory",
+                cycle_time_s=self.cicle_time_s,
+                phase_levels=128,
+                K=training_args.get("K", 0.5),
+                self_phase_weight=training_args.get("self_phase_weight", 0.25),
+                max_memory_cycles=training_args.get("max_memory_cycles", 60)
+            )
+            
+        if training_args is None: 
+            self.harmony_algo = HarmonyAlgo(
+                nbr_beats=self.nbr_beats,
+                beat_duration_s=self.beat_duration_s,
+            )
+        else:
+            self.harmony_algo = HarmonyAlgo(
+                nbr_beats=self.nbr_beats,
+                beat_duration_s=self.beat_duration_s,
+                note_memory_ttl_s= training_args.get("note_memory_ttl_s", 80.0),
+                chord_memory_ttl_s= training_args.get("chord_memory_ttl_s", 6.0),
+                beat_memory_ttl_s= training_args.get("beat_memory_ttl_s", 40.0),
+                dominant_beat_window_s= training_args.get("dominant_beat_window_s", 20.0),
+                chord_commitment_ttl_s= training_args.get("chord_commitment_ttl_s", 12.0),
+                chord_create_probability= training_args.get("chord_create_probability", 0.25),
+                chord_creation_score=training_args.get("chord_creation_score", 1.5),
+                chord_beat_join_boost=training_args.get("chord_beat_join_boost", 2.5),
+                candidate_scale_threshold=training_args.get("candidate_scale_threshold", 0.95),
+                disambiguation_probability=training_args.get("disambiguation_probability", 0.80),
+                min_stable_scale_updates=training_args.get("min_stable_scale_updates", 3)
+            )
 
         self.rhythm_algo = RhythmAlgo(
             nbr_beats=self.nbr_beats,
@@ -57,6 +84,7 @@ class SwarmMusicFsm(Fsm):
             min_duration_factor=0.25,
             max_duration_factor=2.0,
         )
+
 
     def update_communication(self, dt_s, msgs):
         """

@@ -1,5 +1,6 @@
 import mido
 import numpy as np
+from TOOLS.qualityScoresHistory import QualityScoresHistory
 from TOOLS.evaluation import evaluate_musical_quality, compute_weighted_final_score, safe_mean
 from TOOLS.logger import logger
 
@@ -21,6 +22,33 @@ def evaluate_musical_quality_from_midi(
     weights: dict | None = None,
     plot: bool = True,
 ):
+    if isinstance(midi_path, list):
+        all_results = []
+        qualityScoresHistory = QualityScoresHistory()
+        for path in midi_path:
+            result = evaluate_musical_quality_from_midi(
+                path,
+                base_name=path.split("/")[-1].replace(".mid", ""),
+                folder=folder,
+                cycle_time_s=cycle_time_s,
+                n_beats=n_beats,
+                min_time=min_time,
+                time_interval=time_interval,
+                diversity_window_s=diversity_window_s,
+                default_note_duration_s=default_note_duration_s,
+                min_overlap_ratio=min_overlap_ratio,
+                repeat_threshold_s=repeat_threshold_s,
+                sync_window_s=sync_window_s,
+                sync_step_s=sync_step_s,
+                weights=weights,
+                plot=plot,
+            )
+            if result is not None:
+                all_results.append(result)
+                qualityScoresHistory.add_scores(result["display_scores"] | {"final_score": result["final_score"]})
+        qualityScoresHistory.plot_all_score_history(base_name, "metrics/quality/MIDI/multiple_trials")
+        return all_results
+    
     notes_history, beat_played_history, note_events_with_source = midi_to_histories(
         midi_path=midi_path,
         cycle_time_s=cycle_time_s,
@@ -90,7 +118,7 @@ def evaluate_musical_quality_from_midi(
     return results
 
 def midi_to_histories(
-    midi_path: str | list,
+    midi_path: str,
     cycle_time_s: float = 2.0,
     n_beats: int = 4,
     min_note_duration_s: float = 0.05,

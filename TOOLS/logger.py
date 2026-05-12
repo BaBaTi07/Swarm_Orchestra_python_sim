@@ -5,6 +5,9 @@ class logger:
     start_time = time.perf_counter()
     
     def log(level: str, msg: str):
+        if level == "WRITE":
+            with open("metrics/train_log/train_log.txt", "a") as f:
+                f.write(f"{msg}\n")
         if level not in logger.levels:
             print(f"[{level}] {msg}")
         elif level == "TIME":
