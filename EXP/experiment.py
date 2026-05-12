@@ -9,6 +9,7 @@ from SENSORS.ir_comm import IRMedium, IRCommConfig
 from TOOLS.plot_gen import *
 from CONTROL.sync_algo import SyncAlgo
 from TOOLS.evaluation import evaluate_musical_quality
+from TOOLS.qualityScoreHistory import QualityScoresHistory
 
 class Exp( ):
     num_trials     = 0
@@ -38,6 +39,8 @@ class Exp( ):
         enabled=True         
     ))
 
+    qualityScoresHistory = QualityScoresHistory()
+
     def set_name(name):
         Exp.name = name
  
@@ -54,6 +57,7 @@ class Exp( ):
         Exp.sim_time_s = 0.0
         Exp.has_music = [False]* len(Arena.robot)
         Exp.has_ir_comm = [False]* len(Arena.robot)
+        Exp.qualityScoresHistory = QualityScoresHistory()
 
     def reset_single_trial():
         # reset robot position and rotation
@@ -126,8 +130,8 @@ class Exp( ):
                 Exp.midi.stop() 
                 save_beat_played_plot(Exp.current_beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played")
                 save_harmonic_scale_plot(Exp.current_notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales")
-                evaluate_musical_quality(Exp.current_notes_history, Exp.current_beat_played_history, Exp.current_phase_sync_history, base_name=Exp.name if Exp.name else f"trial_{Exp.trial}", folder="metrics/quality/EXP", plot=True)
-                
+                result=evaluate_musical_quality(Exp.current_phase_sync_history, Exp.current_notes_history, Exp.current_beat_played_history, base_name=Exp.name if Exp.name else f"trial_{Exp.trial}", folder="metrics/quality/EXP", plot=True)
+                Exp.qualityScoresHistory.add_scores(result["display_scores"])
                 # add the history to the list of history for all trials
                 Exp.phase_sync_history.append(Exp.current_phase_sync_history)
                 Exp.notes_history.append(Exp.current_notes_history)
@@ -141,6 +145,8 @@ class Exp( ):
             save_sync_plot(Exp.phase_sync_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/phase_sync")
             generate_multiple_execution_beat_evenness_graph(Exp.beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played/multiple_trials")
             generate_multiple_execution_harmonic_graph(Exp.notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales/multiple_trials")
+            Exp.qualityScoresHistory.plot_all_score_history(Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/quality/multiple_trials")
+            
             return False
         else:
             return True

@@ -5,7 +5,7 @@ from TOOLS.logger import logger
 
 # Provides utilities to evaluate musical quality from MIDI files
 def evaluate_musical_quality_from_midi(
-    midi_path: str,
+    midi_path: list | str,
     base_name: str = "midi_evaluation",
     folder: str = "metrics/quality",
     cycle_time_s: float = 2.0,
@@ -85,12 +85,12 @@ def evaluate_musical_quality_from_midi(
     )
 
     if results is not None:
-        results["scores"]["observed_midi_sync"] = observed_sync_score
+        results["observed_midi_sync"] = observed_sync_score
 
     return results
 
 def midi_to_histories(
-    midi_path: str,
+    midi_path: str | list,
     cycle_time_s: float = 2.0,
     n_beats: int = 4,
     min_note_duration_s: float = 0.05,

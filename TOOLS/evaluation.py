@@ -24,7 +24,7 @@ def evaluate_musical_quality(
     beat_played_history,
     base_name: str = "musical_quality",
     folder: str = "metrics/quality",
-    min_time: float = 5.0,
+    min_time: float = 200.0,
     time_interval: float = 2.0,
     diversity_window_s: float = 60.0,
     default_note_duration_s: float = 0.5,
