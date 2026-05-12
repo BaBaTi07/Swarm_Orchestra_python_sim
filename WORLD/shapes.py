@@ -1,8 +1,8 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from OpenGL.GL import *
-from OpenGL.GLU import *
+#from OpenGL.GL import *
+#from OpenGL.GLU import *
 
 class Shapes ():
     def __init__ ( self, pos: NDArray[np.float64], rot: NDArray[np.float64], colour: NDArray[np.float64] ):
