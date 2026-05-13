@@ -2,7 +2,7 @@ import sys
 import numpy as np
 import argparse
 
-from graphics.interface import MainWindow
+from GRAPHICS.interface import MainWindow
 
 from TOOLS.read_json import * 
 from EXP.experiment import *
