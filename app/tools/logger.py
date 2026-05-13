@@ -1,3 +1,4 @@
+import os
 import time 
 class logger:
     curent_level = "DEBUG"
@@ -6,6 +7,7 @@ class logger:
     
     def log(level: str, msg: str):
         if level == "WRITE":
+            os.makedirs("metrics/train_log/train_log", exist_ok=True)
             with open("metrics/train_log/train_log.txt", "a") as f:
                 f.write(f"{msg}\n")
         if level not in logger.levels:
