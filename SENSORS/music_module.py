@@ -6,7 +6,7 @@ import time
 import threading
 
 import numpy as np
-import pygame
+#import pygame
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -25,8 +25,8 @@ class MusicModule:
 
     _is_init = False
     _sample_rate = 44100 # FPS du son
-    _cache: dict[tuple[int, float], pygame.mixer.Sound] = {}
-    _cache_sample : dict[tuple[str,int], pygame.mixer.Sound] = {}
+    _cache = {}
+    _cache_sample = {}
 
     _instrument_dir: Optional[Path] = None
     _instrument_key: str = "default"
@@ -41,16 +41,16 @@ class MusicModule:
             return
 
         MusicModule._sample_rate = int(sample_rate)
-        pygame.mixer.pre_init(frequency=MusicModule._sample_rate, size=-16, channels=channels, buffer=buffer)
+        """pygame.mixer.pre_init(frequency=MusicModule._sample_rate, size=-16, channels=channels, buffer=buffer)
         pygame.mixer.init()
-        pygame.mixer.set_num_channels(int(num_mixer_channels))
+        pygame.mixer.set_num_channels(int(num_mixer_channels))"""
         MusicModule._is_init = True
 
     def __init__(self, channel_id: int):
         if not MusicModule._is_init:
             raise RuntimeError("MusicModule.init_global() must be called before creating MusicModule instances.")
         self.channel_id = int(channel_id)
-        self.channel = pygame.mixer.Channel(self.channel_id)
+        """self.channel = pygame.mixer.Channel(self.channel_id)"""
         self._play_token = 0
 
     @staticmethod
@@ -92,7 +92,7 @@ class MusicModule:
         return None
 
     @staticmethod
-    def _load_sample(midi: int) -> Optional[pygame.mixer.Sound]:
+    def _load_sample(midi: int) :#-> Optional[pygame.mixer.Sound]:
         """
         Charge un sample depuis disque et le met en cache.
         Retourne None si pas trouvé.
@@ -108,7 +108,7 @@ class MusicModule:
         if path is None:
             return None
 
-        snd = pygame.mixer.Sound(str(path))
+        snd = "pygame.mixer.Sound(str(path))"
         MusicModule._cache_sample[key] = snd
         return snd
 
@@ -118,7 +118,7 @@ class MusicModule:
         return 440.0 * (2.0 ** ((float(midi) - 69.0) / 12.0))
 
     @staticmethod
-    def _sine_sound(midi: int, duration_s: float) -> pygame.mixer.Sound:
+    def _sine_sound(midi: int, duration_s: float) :#-> pygame.mixer.Sound:
         """
         Génère un Sound stéréo 16-bit, avec petite enveloppe pour éviter les clics.
         Cache pour éviter de regénérer tout le temps.
@@ -150,7 +150,7 @@ class MusicModule:
         # 16-bit signed
         audio = np.int16(np.clip(stereo, -1.0, 1.0) * 32767)
 
-        sound = pygame.sndarray.make_sound(audio)
+        sound = "pygame.sndarray.make_sound(audio)"
         MusicModule._cache[key] = sound
         return sound
 
@@ -165,7 +165,7 @@ class MusicModule:
         duration_s = max(0.0, float(duration_s))
         fadeout_ms = max(0.0, float(fadeout_ms))
 
-        snd: Optional[pygame.mixer.Sound] = None
+        snd = None
         if prefer_sample:
             snd = MusicModule._load_sample(int(midi))
         if snd is None:
