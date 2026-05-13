@@ -1,5 +1,5 @@
 import numpy as np
-from TOOLS.logger import logger
+from tools.logger import logger
 
 
 class SyncAlgo:

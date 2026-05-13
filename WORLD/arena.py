@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 import math
-from WORLD.shapes import *
+from world.shapes import *
 
 class Arena():
     DeltaT                       = np.array([])

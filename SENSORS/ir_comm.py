@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Deque, List, Optional, Tuple
 from collections import deque
-from TOOLS.angle_to_sector import angle_to_sector
+from tools.angle_to_sector import angle_to_sector
 import numpy as np
 
 

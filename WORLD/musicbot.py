@@ -1,15 +1,15 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from SENSORS.ultrasonic_sensors import Ultrasonic_sensors
-from SENSORS.music_module import MusicModule
+from sensors.ultrasonic_sensors import Ultrasonic_sensors
+from sensors.music_module import MusicModule
 from MIDI.midi_recorder import MidiRecorder
-from SENSORS.ir_comm import IRComm, IRCommConfig
-from TOOLS.angle_to_sector import angle_to_sector
-from TOOLS.note_to_color import note_to_color
+from sensors.ir_comm import IRComm, IRCommConfig
+from tools.angle_to_sector import angle_to_sector
+from tools.note_to_color import note_to_color
 
 
-from WORLD.shapes import Diff_drive_robot
+from world.shapes import Diff_drive_robot
 """from OpenGL.GLU import gluNewQuadric, gluCylinder, gluDisk
 from OpenGL.GL import (
     glPushMatrix, glPopMatrix, glTranslatef,

@@ -1,8 +1,8 @@
 import mido
 import numpy as np
-from TOOLS.qualityScoresHistory import QualityScoresHistory
-from TOOLS.evaluation import evaluate_musical_quality, compute_weighted_final_score, safe_mean
-from TOOLS.logger import logger
+from tools.qualityScoresHistory import QualityScoresHistory
+from tools.evaluation import evaluate_musical_quality, compute_weighted_final_score, safe_mean
+from tools.logger import logger
 
 # Provides utilities to evaluate musical quality from MIDI files
 def evaluate_musical_quality_from_midi(

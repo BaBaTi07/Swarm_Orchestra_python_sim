@@ -4,7 +4,7 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-from WORLD.arena import Arena
+from world.arena import Arena
 
 class Viewer(QOpenGLWidget):
     def __init__(self ):

@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
-from SENSORS.ir_sensors import Ir_sensors
-from WORLD.shapes import *
+from sensors.ir_sensors import Ir_sensors
+from world.shapes import *
 
 class Epuck_robot( Diff_drive_robot ):
     # Epuck dimensions in meters
@@ -21,7 +21,7 @@ class Epuck_robot( Diff_drive_robot ):
     def update_ir_sensors( self ):
         self.Dst_rd.update_sensors( self.id )
     
-    def draw(self):
+    """def draw(self):
         super().draw ()
         
         glPushMatrix()
@@ -62,7 +62,7 @@ class Epuck_robot( Diff_drive_robot ):
             glEnd()
             glLineWidth(1.0)    
             glEnable(GL_LIGHTING)
-        glPopMatrix()
+        glPopMatrix()"""
 
     
 if __name__ == "__main__" :

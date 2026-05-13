@@ -2,9 +2,9 @@ from PyQt6.QtCore import QSize
 from PyQt6.QtWidgets import QApplication, QWidget, QMainWindow, QToolButton, QVBoxLayout, QHBoxLayout, QSpinBox, QLabel, QFileDialog
 from PyQt6.QtGui import QIcon
 
-from GRAPHICS.viewer import Viewer
-from GRAPHICS.engine import Engine
-from EXP.experiment import Exp
+from graphics.viewer import Viewer
+from graphics.engine import Engine
+from exp.experiment import Exp
 
 
 class MainWindow(QMainWindow):

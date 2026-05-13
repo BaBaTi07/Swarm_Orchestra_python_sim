@@ -1,11 +1,11 @@
 import numpy as np
 from numpy.typing import NDArray
-from CONTROL.fsm import Fsm
-from TOOLS.logger import logger
-from TOOLS.scales import Scales
-from CONTROL.sync_algo import SyncAlgo
-from CONTROL.harmony_algo import HarmonyAlgo
-from CONTROL.RythmAlgo import RhythmAlgo
+from control.fsm import Fsm
+from tools.logger import logger
+from tools.scales import Scales
+from control.sync_algo import SyncAlgo
+from control.harmony_algo import HarmonyAlgo
+from control.RythmAlgo import RhythmAlgo
 
 class SwarmMusicFsm(Fsm):
 

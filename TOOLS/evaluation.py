@@ -1,10 +1,10 @@
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-from CONTROL.harmony_algo import CHORD_PATTERNS
-from TOOLS.scales import Scales
-from TOOLS.logger import logger
-from TOOLS.plot_gen import build_filename
+from control.harmony_algo import CHORD_PATTERNS
+from tools.scales import Scales
+from tools.logger import logger
+from tools.plot_gen import build_filename
 
 # Evaluationof the swarm music production, in terms of musical quality
 # Criteria of evaluation are the following:
