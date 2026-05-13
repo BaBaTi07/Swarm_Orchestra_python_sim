@@ -2,13 +2,13 @@ import json
 import numpy as np
 
 #from graphics.interface import *
-from world.arena import *
-from exp.experiment import *
-from world.epuck import *
-from world.musicbot import *
-from world.shapes import *
-from tools.logger import logger
-from tools.random_position import *
+from app.world.arena import *
+from app.exp.experiment import *
+from app.world.epuck import *
+from app.world.musicbot import *
+from app.world.shapes import *
+from app.tools.logger import logger
+from app.tools.random_position import *
 
 
 def read_json_file(file_name: str):

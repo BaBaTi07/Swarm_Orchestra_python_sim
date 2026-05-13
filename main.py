@@ -2,9 +2,9 @@ import sys
 import numpy as np
 import argparse
 
-from tools.read_json import * 
-from exp.experiment import *
-from world.arena import *
+from app.tools.read_json import * 
+from app.exp.experiment import *
+from app.world.arena import *
 
 def preamble( ):
     parser = argparse.ArgumentParser()

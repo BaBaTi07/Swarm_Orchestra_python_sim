@@ -2,11 +2,11 @@ from PyQt6.QtCore import Qt, QTimer
 import numpy as np
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QLabel
-from graphics.viewer import Viewer
-from exp.experiment import Exp
-from world.arena import Arena
-from tools.read_json import read_json_file
-from tools.logger import logger
+from app.graphics.viewer import Viewer
+from app.exp.experiment import Exp
+from app.world.arena import Arena
+from app.tools.read_json import read_json_file
+from app.tools.logger import logger
 
 class Engine( QWidget ):
     def __init__(self, viewer: Viewer, delta_t_ms):

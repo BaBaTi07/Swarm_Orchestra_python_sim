@@ -2,8 +2,8 @@ import numpy as np
 import math
 import random
 
-from tools.logger import logger
-from world.arena import Arena    
+from app.tools.logger import logger
+from app.world.arena import Arena    
 
 def get_robot_radius(robot_class):
     for attr in ("radius", "robot_radius", "body_radius", "r"):

@@ -1,6 +1,6 @@
 import numpy as np
-from tools.logger import logger
-from tools.scales import Scales, CHORD_PATTERNS
+from app.tools.logger import logger
+from app.tools.scales import Scales, CHORD_PATTERNS
 
 
 class HarmonyAlgo:

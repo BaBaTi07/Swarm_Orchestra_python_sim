@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
-from sensors.ir_sensors import Ir_sensors
-from world.shapes import *
+from app.sensors.ir_sensors import Ir_sensors
+from app.world.shapes import *
 
 class Epuck_robot( Diff_drive_robot ):
     # Epuck dimensions in meters

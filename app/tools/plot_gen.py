@@ -3,8 +3,8 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
-from tools.logger import logger
-from tools.scales import Scales, CHORD_PATTERNS
+from app.tools.logger import logger
+from app.tools.scales import Scales, CHORD_PATTERNS
 
 
 def build_filename( base_name: str, folder: str, file_extension: str = "mid" ) -> Path:

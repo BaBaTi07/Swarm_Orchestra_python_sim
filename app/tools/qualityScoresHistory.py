@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from tools.evaluation import build_filename
-from tools.logger import logger
+from app.tools.evaluation import build_filename
+from app.tools.logger import logger
 
 class QualityScoresHistory:
     # This class is used to store the history of the different scores for each metric,

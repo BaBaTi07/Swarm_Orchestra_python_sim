@@ -1,4 +1,4 @@
-from tools.midi_evaluation import evaluate_musical_quality_from_midi
+from app.tools.midi_evaluation import evaluate_musical_quality_from_midi
 
 quality = evaluate_musical_quality_from_midi(
     [ 

@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
-from world.arena import Arena
+from app.world.arena import Arena
 
 class Ir_sensors():
     nb_sensors              = 8

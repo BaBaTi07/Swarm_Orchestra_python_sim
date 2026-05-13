@@ -1,16 +1,16 @@
 import numpy as np
-from control.fsm import *
-from control.SwarmMusicFsm import *
-from world.arena import *
-from tools.logger import logger
+from app.control.fsm import *
+from app.control.SwarmMusicFsm import *
+from app.world.arena import *
+from app.tools.logger import logger
 from MIDI.midi_recorder import MidiRecorder
-from world.musicbot import MusicBot
-from sensors.ir_comm import IRMedium, IRCommConfig
-from tools.plot_gen import *
-from control.sync_algo import SyncAlgo
-from tools.evaluation import evaluate_musical_quality
-from tools.qualityScoresHistory import QualityScoresHistory
-from tools.bounded_normal import bounded_normal
+from app.world.musicbot import MusicBot
+from app.sensors.ir_comm import IRMedium, IRCommConfig
+from app.tools.plot_gen import *
+from app.control.sync_algo import SyncAlgo
+from app.tools.evaluation import evaluate_musical_quality
+from app.tools.qualityScoresHistory import QualityScoresHistory
+from app.tools.bounded_normal import bounded_normal
 from datetime import datetime
 
 class Exp( ):
