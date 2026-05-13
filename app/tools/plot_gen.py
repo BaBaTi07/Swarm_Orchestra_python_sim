@@ -1,5 +1,6 @@
 
 from datetime import datetime
+import os
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
@@ -176,6 +177,7 @@ def save_sync_plot(phase_sync_history, base_name: str, folder: str = "metrics/sy
 
     png_path = build_filename(f"{base_name}_sync_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/mult_last_sync_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 
@@ -282,6 +284,7 @@ def save_harmonic_scale_plot(notes_history, base_name: str, folder: str = "metri
 
     png_path = build_filename(f"{base_name}_harmonic_scale", folder, file_extension="png")
     plt.savefig(png_path, dpi=150, bbox_inches="tight")
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/last_harmonic_scale.png", dpi=150, bbox_inches="tight")
     plt.close()
 
@@ -425,6 +428,7 @@ def save_chord_count_plot( notes_history, base_name: str, folder: str = "metrics
 
     png_path = build_filename(f"{base_name}_chord_count", folder, file_extension="png")
     plt.savefig(png_path, dpi=300, bbox_inches="tight")
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/last_chord_count.png", dpi=300, bbox_inches="tight")
     plt.close()
 
@@ -505,6 +509,7 @@ def save_beat_played_plot(beat_played_history, base_name: str, folder: str = "me
     plt.tight_layout()
     name = build_filename(f"{base_name}", folder, file_extension="png")
     plt.savefig(f"{name}_evenness.png", dpi=200)
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/last_evenness.png", dpi=200)
     plt.close()
 
@@ -525,6 +530,7 @@ def save_beat_played_plot(beat_played_history, base_name: str, folder: str = "me
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"{name}_beat_counts.png", dpi=200)
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/last_beat_count.png",dpi = 200)
     plt.close() 
 
@@ -612,6 +618,7 @@ def generate_multiple_execution_harmonic_graph(all_notes_history, base_name: str
 
     png_path = build_filename(f"{base_name}_harmonic_sync_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/mult_last_harmonic_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 
@@ -849,6 +856,7 @@ def generate_multiple_execution_chord_graph(all_notes_history, base_name: str, f
 
     png_path = build_filename(f"{base_name}_chord_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/mult_last_chord_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 
@@ -954,6 +962,7 @@ def generate_multiple_execution_beat_evenness_graph(all_beat_played_history, bas
 
     png_path = build_filename(f"{base_name}_beat_evenness_aggregate", folder, file_extension="png")
     plt.savefig(png_path, dpi=180, bbox_inches="tight")
+    os.makedirs("metrics/last", exist_ok=True)
     plt.savefig("metrics/last/mult_last_beat_evenness_aggregate.png", dpi=180, bbox_inches="tight")
     plt.close()
 

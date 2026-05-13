@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 from app.tools.evaluation import build_filename
@@ -89,6 +91,7 @@ class QualityScoresHistory:
 
         png_path = build_filename(f"{base_name}_musical_quality_history", folder, file_extension="png")
         plt.savefig(png_path, dpi=180, bbox_inches="tight")
+        os.makedirs("metrics/last", exist_ok=True)
         plt.savefig("metrics/last/last_musical_quality_history.png", dpi=180, bbox_inches="tight")
         plt.close()
         logger.log("INFO",f"Saved musical quality history graph: {png_path}")
