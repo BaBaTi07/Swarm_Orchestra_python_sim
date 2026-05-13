@@ -22,18 +22,18 @@ class Exp( ):
     dt_s          = 0.2
     sim_time_s     = 0.0
     training_mode  = False
-    training_args  = {
-        "note_memory_ttl_s": 80.0,
-        "chord_memory_ttl_s": 6.0,
-        "beat_memory_ttl_s": 40.0,
-        "dominant_beat_window_s": 20.0,
-        "chord_commitment_ttl_s": 12.0,
-        "chord_create_probability": 0.25,
-        "chord_creation_score": 1.5,
+    training_args  = {  #param found durring trainig
+        "note_memory_ttl_s": 88.9,
+        "chord_memory_ttl_s": 0.2,
+        "beat_memory_ttl_s": 37.6,
+        "dominant_beat_window_s": 16.0,
+        "chord_commitment_ttl_s": 15.4,
+        "chord_create_probability": 0.18,
+        "chord_creation_score": 0.015,
         "chord_beat_join_boost": 2.5,
-        "candidate_scale_threshold": 0.95,
-        "disambiguation_probability": 0.8,
-        "min_stable_scale_updates": 3,
+        "candidate_scale_threshold": 0.87,
+        "disambiguation_probability": 0.67,
+        "min_stable_scale_updates": 1,
     }
     best_training_args = training_args.copy()
     name           = None
@@ -217,17 +217,17 @@ class Exp( ):
                 # update training args for the next trial,
                 # TODO :change this to a random close from the current best args
                 Exp.training_args = {
-                    "note_memory_ttl_s": bounded_normal(Exp.best_training_args["note_memory_ttl_s"], 5.0, 0.0, 100.0),
-                    "chord_memory_ttl_s": bounded_normal(Exp.best_training_args["chord_memory_ttl_s"], 5.0, 0.0, 100.0),
-                    "beat_memory_ttl_s": bounded_normal(Exp.best_training_args["beat_memory_ttl_s"], 5.0, 0.0, 100.0),
-                    "dominant_beat_window_s": bounded_normal(Exp.best_training_args["dominant_beat_window_s"], 5.0, 0.0, 100.0),
-                    "chord_commitment_ttl_s": bounded_normal(Exp.best_training_args["chord_commitment_ttl_s"], 5.0, 0.0, 100.0),
-                    "chord_create_probability": bounded_normal(Exp.best_training_args["chord_create_probability"], 0.05, 0.0, 1.0),
-                    "chord_creation_score": bounded_normal(Exp.best_training_args["chord_creation_score"], 0.5, 0.0, 10.0),
-                    "chord_beat_join_boost": bounded_normal(Exp.best_training_args["chord_beat_join_boost"], 0.5, 0.0, 10.0),
-                    "candidate_scale_threshold": bounded_normal(Exp.best_training_args["candidate_scale_threshold"], 0.05, 0.0, 1.0),
-                    "disambiguation_probability": bounded_normal(Exp.best_training_args["disambiguation_probability"], 0.05, 0.0, 1.0),
-                    "min_stable_scale_updates": int(bounded_normal(Exp.best_training_args["min_stable_scale_updates"], 0.5, 0.0, 10.0)),
+                    "note_memory_ttl_s": bounded_normal(Exp.best_training_args["note_memory_ttl_s"], 2.0, 0.0, 100.0),
+                    "chord_memory_ttl_s": bounded_normal(Exp.best_training_args["chord_memory_ttl_s"], 2.0, 0.0, 100.0),
+                    "beat_memory_ttl_s": bounded_normal(Exp.best_training_args["beat_memory_ttl_s"], 2.0, 0.0, 100.0),
+                    "dominant_beat_window_s": bounded_normal(Exp.best_training_args["dominant_beat_window_s"], 2.0, 0.0, 100.0),
+                    "chord_commitment_ttl_s": bounded_normal(Exp.best_training_args["chord_commitment_ttl_s"], 2.0, 0.0, 100.0),
+                    "chord_create_probability": bounded_normal(Exp.best_training_args["chord_create_probability"], 0.02, 0.0, 1.0),
+                    "chord_creation_score": bounded_normal(Exp.best_training_args["chord_creation_score"], 0.2, 0.0, 10.0),
+                    "chord_beat_join_boost": bounded_normal(Exp.best_training_args["chord_beat_join_boost"], 0.2, 0.0, 10.0),
+                    "candidate_scale_threshold": bounded_normal(Exp.best_training_args["candidate_scale_threshold"], 0.02, 0.0, 1.0),
+                    "disambiguation_probability": bounded_normal(Exp.best_training_args["disambiguation_probability"], 0.02, 0.0, 1.0),
+                    "min_stable_scale_updates": int(bounded_normal(Exp.best_training_args["min_stable_scale_updates"], 0.2, 0.0, 10.0)),
                 }
                 logger.log("WRITE", f"Updated training args for next trial: {Exp.training_args}")
 
