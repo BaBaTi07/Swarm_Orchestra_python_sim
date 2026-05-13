@@ -197,13 +197,13 @@ class Exp( ):
                         Exp.make_iteration(mute)
 
                     last_score = Exp.qualityScoresHistory.get_final_score_history()[-1] if Exp.qualityScoresHistory.get_final_score_history() else 0
+                    total_score += last_score
+                    n += 1
                     if last_score < 0.6:
                         
                         logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Score: {last_score:.3f} - Not good enough, moving to next trial.")
                         break # if the score is not good enough, we can stop the current trial and start a new one to save time during training
-                    else:
-                        total_score += last_score
-                        n += 1  
+
                     print(last_score)
                     logger.log("WRITE", f"Trial {Exp.trial} ended with final score: {last_score:.3f}")
                 
