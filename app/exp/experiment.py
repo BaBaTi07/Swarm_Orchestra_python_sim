@@ -23,21 +23,24 @@ class Exp( ):
     sim_time_s     = 0.0
     training_mode  = False
     training_args  = {
-        "note_memory_ttl_s": 88.9,
-        "chord_memory_ttl_s": 0.2,
-        "beat_memory_ttl_s": 37.6,
-        "dominant_beat_window_s": 16.0,
-        "chord_commitment_ttl_s": 15.4,
-        "chord_create_probability": 0.18,
-        "chord_creation_score": 0.015,
-        "chord_beat_join_boost": 2.5,
-        "candidate_scale_threshold": 0.87,
-        "disambiguation_probability": 0.67,
-        "min_stable_scale_updates": 1,
+        "note_memory_ttl_s": 95.7,
+        "chord_memory_ttl_s": 0.17,
+        "beat_memory_ttl_s": 32.9,
+        "dominant_beat_window_s": 15.3,
+        "chord_commitment_ttl_s": 13.8,
+        "chord_create_probability": 0.24,
+        "chord_creation_score": 0.67,
+        "chord_beat_join_boost": 2.78,
+        "candidate_scale_threshold": 0.86,
+        "disambiguation_probability": 0.61,
+        "min_stable_scale_updates": 0,
     }
 
     best_training_args = training_args.copy()
-    good_training_args_history = []
+    good_training_args_history = [
+        {'note_memory_ttl_s': 88.42965129136586, 'chord_memory_ttl_s': 0.17305394706447375, 'beat_memory_ttl_s': 35.545009608263086, 'dominant_beat_window_s': 18.203109903939442, 'chord_commitment_ttl_s': 14.127658316334163, 'chord_create_probability': 0.16957242251095234, 'chord_creation_score': 0.11284174058169948, 'chord_beat_join_boost': 2.1858117173801244, 'candidate_scale_threshold': 0.8790138026999914, 'disambiguation_probability': 0.6898419547117058, 'min_stable_scale_updates': 1},
+        {'note_memory_ttl_s': 89.02628331343067, 'chord_memory_ttl_s': 0.24949361043409543, 'beat_memory_ttl_s': 31.430970974531, 'dominant_beat_window_s': 17.148912412526112, 'chord_commitment_ttl_s': 15.4053338543377, 'chord_create_probability': 0.17790396698184757, 'chord_creation_score': 0.11280683004005476, 'chord_beat_join_boost': 2.2261156639650124, 'candidate_scale_threshold': 0.8661646553856638, 'disambiguation_probability': 0.6876882661448415, 'min_stable_scale_updates': 1},
+        {'note_memory_ttl_s': 88.44394545063955, 'chord_memory_ttl_s': 0.2411117505654986, 'beat_memory_ttl_s': 39.187433344564305, 'dominant_beat_window_s': 14.445455076084015, 'chord_commitment_ttl_s': 14.740911877295337, 'chord_create_probability': 0.18924544805397828, 'chord_creation_score': 0.11390856893474123, 'chord_beat_join_boost': 2.358566930779889, 'candidate_scale_threshold': 0.9121040100068177, 'disambiguation_probability': 0.6898419547117058, 'min_stable_scale_updates': 1}]
     name           = None
     has_music = [False]* len(Arena.robot)
     has_ir_comm = [False]* len(Arena.robot)
@@ -172,7 +175,7 @@ class Exp( ):
             generate_multiple_execution_beat_evenness_graph(Exp.beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played/multiple_trials")
             generate_multiple_execution_harmonic_graph(Exp.notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales/multiple_trials")
             Exp.qualityScoresHistory.plot_all_score_history(Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/quality/EXP/multiple_trials")
-            
+            Exp.qualityScoresHistory.remove_all_scores() # remove scores from the history, to ot polute next trial
             return False
         else:
             return True
@@ -201,17 +204,10 @@ class Exp( ):
                     last_score = Exp.qualityScoresHistory.get_final_score_history()[-1] if Exp.qualityScoresHistory.get_final_score_history() else 0
                     total_score += last_score
                     n += 1  
-                    if last_score < 0.6:
-                        
-                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Score: {last_score:.3f} - Not good enough, moving to next trial.")
-                        break # if the score is not good enough, we can stop the current trial and start a new one to save time during training
-                    
-                    if n > 3 and total_score/n < 0.8*best_score:
-                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Average Score: {total_score/n:.3f} - Average score is low after 3 trials, moving to next training.")
-                        break # if after 3 trials the average score can not compete with the best_score, moving on
-                    
-                    if n > 5 and total_score / n < 0.9*best_score: # if after 5 trials the average score can not compete with the best_score, moving on
-                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Average Score: {total_score/n:.3f} - Average score is low after 5 trials, moving to next training.")
+                    # if the score is too low, we stop the current training and start a new one to save time during training
+                    if (last_score < 0.6) or (n >= 3 and total_score/n < 0.8*best_score) or (n >= 5 and total_score/n < 0.9*best_score): 
+                        logger.log("WRITE", f"Trial {Exp.trial}, Score: {last_score:.3f}, mean score: {total_score/n:.3f} - Not good enough, moving to next trial.")
+                        Exp.qualityScoresHistory.remove_all_scores() # remove scores from the current trial 
                         break
                     
                     print(last_score)
@@ -225,7 +221,7 @@ class Exp( ):
                     #remove old training (max 3)
                     if len(Exp.good_training_args_history) >= 3:
                         Exp.good_training_args_history = Exp.good_training_args_history[-3:]
-                        
+
                 elif mean_score > best_score * 0.96: # if the score is close to the best score, we can still consider it as an improvement and keep the training args
                     Exp.good_training_args_history.append(Exp.training_args.copy())
                     logger.log("WRITE", f"$$$$ New good score achieved: {mean_score:.3f} with training args: {Exp.training_args}, but not better than the best score: {best_score:.3f}")

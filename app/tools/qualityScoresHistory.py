@@ -24,6 +24,14 @@ class QualityScoresHistory:
         self.note_diversity_by_beat_history_score.append(scores.get("note_diversity_by_beat", np.nan))
         self.final_score_history.append(scores.get("final_score", np.nan))
     
+    def remove_all_scores(self):
+        self.phase_sync_history_score = []
+        self.scale_harmony_history_score = []
+        self.chord_harmony_history_score = []
+        self.beat_evenness_history_score = []
+        self.note_diversity_by_beat_history_score = []
+        self.final_score_history = []
+        
     def get_final_score_history(self):
         return self.final_score_history
     
