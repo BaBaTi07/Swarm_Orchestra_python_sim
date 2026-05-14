@@ -201,17 +201,10 @@ class Exp( ):
                     last_score = Exp.qualityScoresHistory.get_final_score_history()[-1] if Exp.qualityScoresHistory.get_final_score_history() else 0
                     total_score += last_score
                     n += 1  
-                    if last_score < 0.6:
-                        
-                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Score: {last_score:.3f} - Not good enough, moving to next trial.")
-                        break # if the score is not good enough, we can stop the current trial and start a new one to save time during training
-                    
-                    if n > 3 and total_score/n < 0.8*best_score:
-                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Average Score: {total_score/n:.3f} - Average score is low after 3 trials, moving to next training.")
-                        break # if after 3 trials the average score can not compete with the best_score, moving on
-                    
-                    if n > 5 and total_score / n < 0.9*best_score: # if after 5 trials the average score can not compete with the best_score, moving on
-                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Average Score: {total_score/n:.3f} - Average score is low after 5 trials, moving to next training.")
+                    # if the score is too low, we stop the current training and start a new one to save time during training
+                    if (last_score < 0.6) or (n >= 3 and total_score/n < 0.8*best_score) or (n >= 5 and total_score/n < 0.9*best_score): 
+                        logger.log("WRITE", f"Trial {Exp.trial}, Score: {last_score:.3f}, mean score: {total_score/n:.3f} - Not good enough, moving to next trial.")
+                        Exp.qualityScoresHistory.remove_all_scores() # remove scores from the current trial 
                         break
                     
                     print(last_score)
@@ -225,7 +218,7 @@ class Exp( ):
                     #remove old training (max 3)
                     if len(Exp.good_training_args_history) >= 3:
                         Exp.good_training_args_history = Exp.good_training_args_history[-3:]
-                        
+
                 elif mean_score > best_score * 0.96: # if the score is close to the best score, we can still consider it as an improvement and keep the training args
                     Exp.good_training_args_history.append(Exp.training_args.copy())
                     logger.log("WRITE", f"$$$$ New good score achieved: {mean_score:.3f} with training args: {Exp.training_args}, but not better than the best score: {best_score:.3f}")
