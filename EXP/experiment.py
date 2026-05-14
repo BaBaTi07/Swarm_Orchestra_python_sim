@@ -172,7 +172,7 @@ class Exp( ):
             generate_multiple_execution_beat_evenness_graph(Exp.beat_played_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/beat_played/multiple_trials")
             generate_multiple_execution_harmonic_graph(Exp.notes_history, Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/harmonic_scales/multiple_trials")
             Exp.qualityScoresHistory.plot_all_score_history(Exp.name if Exp.name else f"trial_{Exp.trial}", "metrics/quality/EXP/multiple_trials")
-            
+            Exp.qualityScoresHistory.remove_all_scores() # remove scores from the history, to ot polute next trial
             return False
         else:
             return True
