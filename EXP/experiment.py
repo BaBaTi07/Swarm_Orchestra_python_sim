@@ -23,21 +23,24 @@ class Exp( ):
     sim_time_s     = 0.0
     training_mode  = False
     training_args  = {
-        "note_memory_ttl_s": 88.9,
-        "chord_memory_ttl_s": 0.2,
-        "beat_memory_ttl_s": 37.6,
-        "dominant_beat_window_s": 16.0,
-        "chord_commitment_ttl_s": 15.4,
-        "chord_create_probability": 0.18,
-        "chord_creation_score": 0.015,
-        "chord_beat_join_boost": 2.5,
-        "candidate_scale_threshold": 0.87,
-        "disambiguation_probability": 0.67,
-        "min_stable_scale_updates": 1,
+        "note_memory_ttl_s": 95.7,
+        "chord_memory_ttl_s": 0.17,
+        "beat_memory_ttl_s": 32.9,
+        "dominant_beat_window_s": 15.3,
+        "chord_commitment_ttl_s": 13.8,
+        "chord_create_probability": 0.24,
+        "chord_creation_score": 0.67,
+        "chord_beat_join_boost": 2.78,
+        "candidate_scale_threshold": 0.86,
+        "disambiguation_probability": 0.61,
+        "min_stable_scale_updates": 0,
     }
 
     best_training_args = training_args.copy()
-    good_training_args_history = []
+    good_training_args_history = [
+        {'note_memory_ttl_s': 88.42965129136586, 'chord_memory_ttl_s': 0.17305394706447375, 'beat_memory_ttl_s': 35.545009608263086, 'dominant_beat_window_s': 18.203109903939442, 'chord_commitment_ttl_s': 14.127658316334163, 'chord_create_probability': 0.16957242251095234, 'chord_creation_score': 0.11284174058169948, 'chord_beat_join_boost': 2.1858117173801244, 'candidate_scale_threshold': 0.8790138026999914, 'disambiguation_probability': 0.6898419547117058, 'min_stable_scale_updates': 1},
+        {'note_memory_ttl_s': 89.02628331343067, 'chord_memory_ttl_s': 0.24949361043409543, 'beat_memory_ttl_s': 31.430970974531, 'dominant_beat_window_s': 17.148912412526112, 'chord_commitment_ttl_s': 15.4053338543377, 'chord_create_probability': 0.17790396698184757, 'chord_creation_score': 0.11280683004005476, 'chord_beat_join_boost': 2.2261156639650124, 'candidate_scale_threshold': 0.8661646553856638, 'disambiguation_probability': 0.6876882661448415, 'min_stable_scale_updates': 1},
+        {'note_memory_ttl_s': 88.44394545063955, 'chord_memory_ttl_s': 0.2411117505654986, 'beat_memory_ttl_s': 39.187433344564305, 'dominant_beat_window_s': 14.445455076084015, 'chord_commitment_ttl_s': 14.740911877295337, 'chord_create_probability': 0.18924544805397828, 'chord_creation_score': 0.11390856893474123, 'chord_beat_join_boost': 2.358566930779889, 'candidate_scale_threshold': 0.9121040100068177, 'disambiguation_probability': 0.6898419547117058, 'min_stable_scale_updates': 1}]
     name           = None
     has_music = [False]* len(Arena.robot)
     has_ir_comm = [False]* len(Arena.robot)
