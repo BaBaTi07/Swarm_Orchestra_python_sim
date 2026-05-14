@@ -23,20 +23,21 @@ class Exp( ):
     sim_time_s     = 0.0
     training_mode  = False
     training_args  = {
-        "note_memory_ttl_s": 88.2,
-        "chord_memory_ttl_s": 1.7,
-        "beat_memory_ttl_s": 29.9,
-        "dominant_beat_window_s": 13.2,
-        "chord_commitment_ttl_s": 11.7,
-        "chord_create_probability": 0.17,
-        "chord_creation_score": 0.31,
-        "chord_beat_join_boost": 2.7,
-        "candidate_scale_threshold": 0.89,
-        "disambiguation_probability": 0.65,
-        "min_stable_scale_updates": 2,
+        "note_memory_ttl_s": 88.9,
+        "chord_memory_ttl_s": 0.2,
+        "beat_memory_ttl_s": 37.6,
+        "dominant_beat_window_s": 16.0,
+        "chord_commitment_ttl_s": 15.4,
+        "chord_create_probability": 0.18,
+        "chord_creation_score": 0.015,
+        "chord_beat_join_boost": 2.5,
+        "candidate_scale_threshold": 0.87,
+        "disambiguation_probability": 0.67,
+        "min_stable_scale_updates": 1,
     }
 
     best_training_args = training_args.copy()
+    good_training_args_history = []
     name           = None
     has_music = [False]* len(Arena.robot)
     has_ir_comm = [False]* len(Arena.robot)
@@ -204,7 +205,15 @@ class Exp( ):
                         
                         logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Score: {last_score:.3f} - Not good enough, moving to next trial.")
                         break # if the score is not good enough, we can stop the current trial and start a new one to save time during training
-
+                    
+                    if n > 3 and total_score/n < 0.8*best_score:
+                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Average Score: {total_score/n:.3f} - Average score is low after 3 trials, moving to next training.")
+                        break # if after 3 trials the average score can not compete with the best_score, moving on
+                    
+                    if n > 5 and total_score / n < 0.9*best_score: # if after 5 trials the average score can not compete with the best_score, moving on
+                        logger.log("WRITE", f"Trial {Exp.trial}, Iteration {Exp.iter}, Average Score: {total_score/n:.3f} - Average score is low after 5 trials, moving to next training.")
+                        break
+                    
                     print(last_score)
                     logger.log("WRITE", f"Trial {Exp.trial} ended with final score: {last_score:.3f}")
                 
@@ -213,10 +222,17 @@ class Exp( ):
                     best_score = mean_score
                     Exp.best_training_args = Exp.training_args.copy()
                     logger.log("WRITE", f"$$$$ New best score achieved: {best_score:.3f} with training args: {Exp.training_args}")
+                    #remove old training (max 3)
+                    if len(Exp.good_training_args_history) >= 3:
+                        Exp.good_training_args_history = Exp.good_training_args_history[-3:]
+                        
+                elif mean_score > best_score * 0.96: # if the score is close to the best score, we can still consider it as an improvement and keep the training args
+                    Exp.good_training_args_history.append(Exp.training_args.copy())
+                    logger.log("WRITE", f"$$$$ New good score achieved: {mean_score:.3f} with training args: {Exp.training_args}, but not better than the best score: {best_score:.3f}")
                 else:
                     logger.log("WRITE", f"Current score {mean_score:.3f} does not improve the best score: {best_score:.3f}")
-                # update training args for the next trial,
-                # TODO :change this to a random close from the current best args
+                
+                # update training args for the next trial     
                 Exp.training_args = {
                     "note_memory_ttl_s": bounded_normal(Exp.best_training_args["note_memory_ttl_s"], 2.0, 0.0, 100.0),
                     "chord_memory_ttl_s": bounded_normal(Exp.best_training_args["chord_memory_ttl_s"], 2.0, 0.0, 100.0),
@@ -230,6 +246,15 @@ class Exp( ):
                     "disambiguation_probability": bounded_normal(Exp.best_training_args["disambiguation_probability"], 0.02, 0.0, 1.0),
                     "min_stable_scale_updates": int(bounded_normal(Exp.best_training_args["min_stable_scale_updates"], 0.2, 0.0, 10.0)),
                 }
+
+                #pick random good training args from the history to replace some current training args
+                if len(Exp.good_training_args_history) > 0:
+                    random_good_args = Exp.good_training_args_history[np.random.randint(len(Exp.good_training_args_history))]
+                    for key in Exp.training_args.keys():
+                        if np.random.rand() < 0.3: # 30% chance to replace the current training arg with a good one from the history
+                            Exp.training_args[key] = random_good_args[key]
+                            logger.log("WRITE", f"Randomly replaced training arg '{key}' with value from good history: {random_good_args[key]}")
+
                 logger.log("WRITE", f"Updated training args for next trial: {Exp.training_args}")
 
     def get_ir_messages(rb, time_s: float, dt_s: float) -> list:
